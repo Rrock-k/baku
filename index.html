@@ -19,7 +19,7 @@
   <link rel="preload" as="video" href="heart.mp4" type="video/mp4" />
 
   <style>
-    ` :root {
+    :root {
       --bg: #f8f8f8;
       --fg: #0f0f0f;
       --btn: #111;
@@ -227,14 +227,39 @@
       }
 
       function onEnded () {
-        // Возвращаемся в idle (постер)
+        // Застываем на последнем кадре
         hideOverlay();
-        fadeOut(current.el);
-        setTimeout(showPoster, 180);
-        current = null;
       }
 
       async function playNext () {
+        if (current) {
+          // Если есть текущее видео, проигрываем его назад
+          await new Promise(resolve => {
+            const video = current.el;
+            const fps = 30;
+            const interval = 1000 / fps;
+            let lastTime = performance.now();
+
+            function step(now) {
+              if (now - lastTime < interval) {
+                requestAnimationFrame(step);
+                return;
+              }
+              lastTime = now;
+              video.currentTime = Math.max(0, video.currentTime - (1 / fps) * 2.0); // Ускоряем в 2 раза
+              if (video.currentTime <= 0) {
+                video.pause();
+                resolve();
+              } else {
+                requestAnimationFrame(step);
+              }
+            }
+            requestAnimationFrame(step);
+          });
+          fadeOut(current.el);
+          current = null;
+        }
+
         const next = pickNext();
         lastId = next.id; current = next;
         stopAll(); hidePoster();
@@ -242,6 +267,7 @@
           try { await next.el.play(); } catch { }
         }
         next.el.currentTime = 0;
+        next.el.playbackRate = 1.0; // Убедимся, что скорость нормальная
         next.el.play().catch(() => { });
         fadeIn(next.el);
         showOverlayFor(next.id);
