@@ -190,7 +190,7 @@
         source.src = preferred;
         c.el.appendChild(source);
         c.el.muted = true; c.el.playsInline = true; c.el.setAttribute('playsinline', '');
-        c.el.addEventListener('ended', onEnded);
+        // Обработчик ended будет добавляться динамически в playNext()
         c.el.addEventListener('error', (e) => console.warn('Video error', c.id, e));
       }
 
@@ -204,6 +204,8 @@
 
       let lastId = null;
       let current = null;
+      let reverseInterval = null; // Отслеживание активного интервала обратного воспроизведения
+      let isReversing = false; // Флаг для предотвращения повторных вызовов
 
       function pickNext () {
         // исключаем повтор предыдущего
@@ -211,8 +213,16 @@
         return pool[Math.floor(Math.random() * pool.length)];
       }
 
-      async function fadeIn (el) { el.style.transition = 'opacity 200ms linear'; el.style.opacity = '1'; }
-      async function fadeOut (el) { el.style.transition = 'opacity 200ms linear'; el.style.opacity = '0'; }
+      async function fadeIn (el) {
+        el.style.transition = 'opacity 200ms linear';
+        el.style.opacity = '1';
+        return new Promise(resolve => setTimeout(resolve, 200));
+      }
+      async function fadeOut (el) {
+        el.style.transition = 'opacity 200ms linear';
+        el.style.opacity = '0';
+        return new Promise(resolve => setTimeout(resolve, 200));
+      }
 
       function showPoster () { poster.style.opacity = '1'; }
       function hidePoster () { poster.style.opacity = '0'; }
@@ -223,6 +233,13 @@
       function hideOverlay () { overlay.style.opacity = '0'; }
 
       function stopAll () {
+        // Очищаем интервал обратного воспроизведения если он активен
+        if (reverseInterval) {
+          clearInterval(reverseInterval);
+          reverseInterval = null;
+        }
+        isReversing = false;
+
         for (const c of clips) { c.el.pause(); c.el.currentTime = 0; c.el.style.opacity = '0'; }
       }
 
@@ -235,25 +252,44 @@
       }
 
       async function playNext () {
+        // Предотвращаем повторные вызовы во время обратного воспроизведения
+        if (isReversing) {
+          return;
+        }
+
         againBtn.disabled = true;
 
         if (current && current.el.currentTime > 0) {
+          // Очищаем предыдущий интервал если он существует
+          if (reverseInterval) {
+            clearInterval(reverseInterval);
+            reverseInterval = null;
+          }
+
+          isReversing = true;
+
           // Если есть текущее видео и оно не в начале, проигрываем его назад
           await new Promise(resolve => {
             const video = current.el;
-            const reverseSpeed = 1.7;
-            const interval = 16; // ~60fps
+            const reverseSpeed = 2.0; // Увеличиваем скорость для быстрого завершения
+            const interval = 50; // Снижаем частоту до 20fps для лучшей производительности
 
-            const reverseInterval = setInterval(() => {
-              video.currentTime -= (interval / 1000) * reverseSpeed;
-              if (video.currentTime <= 0) {
+            reverseInterval = setInterval(() => {
+              const newTime = video.currentTime - (interval / 1000) * reverseSpeed;
+
+              if (newTime <= 0) {
                 clearInterval(reverseInterval);
+                reverseInterval = null;
                 video.currentTime = 0;
                 video.pause();
-                fadeOut(video).then(() => {
-                  current = null;
-                  resolve();
-                });
+
+                // Сразу скрываем видео без анимации для скорости
+                video.style.opacity = '0';
+                current = null;
+                isReversing = false;
+                resolve();
+              } else {
+                video.currentTime = newTime;
               }
             }, interval);
           });
@@ -278,20 +314,25 @@
         videoToPlay.playbackRate = 1.0;
         videoToPlay.currentTime = 0;
 
-        // Удаляем старый обработчик, чтобы избежать дублирования
-        const oldOnEnded = videoToPlay.listeners?.ended?.[0];
-        if (oldOnEnded) {
-          videoToPlay.removeEventListener('ended', oldOnEnded);
-        }
-        
+        // Добавляем обработчик ended с автоматическим удалением
         const onPlayEnd = () => {
           onEnded();
-          videoToPlay.removeEventListener('ended', onPlayEnd);
         };
         videoToPlay.addEventListener('ended', onPlayEnd, { once: true });
 
 
         try {
+          // Ждем готовности видео перед воспроизведением
+          if (videoToPlay.readyState < 3) { // HAVE_FUTURE_DATA
+            await new Promise(resolve => {
+              const onCanPlay = () => {
+                videoToPlay.removeEventListener('canplay', onCanPlay);
+                resolve();
+              };
+              videoToPlay.addEventListener('canplay', onCanPlay);
+            });
+          }
+
           await videoToPlay.play();
           fadeIn(videoToPlay);
           showOverlayFor(next.id);
@@ -301,7 +342,13 @@
         }
       }
 
-      againBtn.addEventListener('click', playNext);
+      againBtn.addEventListener('click', () => {
+        // Дополнительная защита от множественных кликов
+        if (againBtn.disabled || isReversing) {
+          return;
+        }
+        playNext();
+      });
 
       // Автовоспроизведение при входе
       (async () => {
