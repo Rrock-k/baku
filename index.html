@@ -74,7 +74,7 @@
     }
 
     .poster {
-      opacity: 1;
+      opacity: 0;
       transition: opacity 250ms linear;
     }
 
@@ -122,6 +122,13 @@
       background: var(--btn);
       color: var(--btn-fg);
       box-shadow: 0 6px 18px rgba(0, 0, 0, .12);
+      transition: all 200ms ease;
+    }
+
+    button:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: scale(0.95);
     }
 
     .hint {
@@ -246,9 +253,7 @@
       function onEnded () {
         // Застываем на последнем кадре и включаем кнопку
         hideOverlay();
-        if (current && current.el.playbackRate > 0) {
-          againBtn.disabled = false;
-        }
+        againBtn.disabled = false; // Разблокируем кнопку после завершения видео
       }
 
       async function playNext () {
@@ -257,6 +262,7 @@
           return;
         }
 
+        // Блокируем кнопку сразу при клике
         againBtn.disabled = true;
 
         if (current && current.el.currentTime > 0) {
@@ -283,8 +289,7 @@
                 video.currentTime = 0;
                 video.pause();
 
-                // Сразу скрываем видео без анимации для скорости
-                video.style.opacity = '0';
+                // НЕ скрываем видео - оставляем видимым до показа нового
                 current = null;
                 isReversing = false;
                 resolve();
@@ -299,17 +304,6 @@
         lastId = next.id;
         current = next;
 
-        // Останавливаем все остальные видео
-        clips.forEach(c => {
-          if (c.id !== next.id) {
-            c.el.pause();
-            c.el.currentTime = 0;
-            c.el.style.opacity = '0';
-          }
-        });
-
-        hidePoster();
-
         const videoToPlay = next.el;
         videoToPlay.playbackRate = 1.0;
         videoToPlay.currentTime = 0;
@@ -320,22 +314,26 @@
         };
         videoToPlay.addEventListener('ended', onPlayEnd, { once: true });
 
+        // Убираем постер для плавного перехода между видео
+        hidePoster();
 
         try {
-          // Ждем готовности видео перед воспроизведением
-          if (videoToPlay.readyState < 3) { // HAVE_FUTURE_DATA
-            await new Promise(resolve => {
-              const onCanPlay = () => {
-                videoToPlay.removeEventListener('canplay', onCanPlay);
-                resolve();
-              };
-              videoToPlay.addEventListener('canplay', onCanPlay);
-            });
-          }
+          // Показываем новое видео мгновенно, не ждем готовности
+          videoToPlay.style.opacity = '1'; // Сначала показываем
 
+          // Сразу скрываем остальные видео
+          clips.forEach(c => {
+            if (c.id !== next.id) {
+              c.el.pause();
+              c.el.currentTime = 0;
+              c.el.style.opacity = '0';
+            }
+          });
+
+          // Запускаем воспроизведение
           await videoToPlay.play();
-          fadeIn(videoToPlay);
           showOverlayFor(next.id);
+
         } catch (e) {
           console.error("Ошибка воспроизведения:", e);
           againBtn.disabled = false; // Разблокируем кнопку в случае ошибки
@@ -352,8 +350,8 @@
 
       // Автовоспроизведение при входе
       (async () => {
-        // Небольшая задержка чтобы постер точно показался
-        setTimeout(playNext, 200);
+        // Сразу запускаем видео без показа постера
+        setTimeout(playNext, 100);
       })();
 
     })();
