@@ -227,50 +227,78 @@
       }
 
       function onEnded () {
-        // Застываем на последнем кадре
+        // Застываем на последнем кадре и включаем кнопку
         hideOverlay();
+        if (current && current.el.playbackRate > 0) {
+          againBtn.disabled = false;
+        }
       }
 
       async function playNext () {
-        if (current) {
-          // Если есть текущее видео, проигрываем его назад
+        againBtn.disabled = true;
+
+        if (current && current.el.currentTime > 0) {
+          // Если есть текущее видео и оно не в начале, проигрываем его назад
           await new Promise(resolve => {
             const video = current.el;
-            const fps = 30;
-            const interval = 1000 / fps;
-            let lastTime = performance.now();
+            const reverseSpeed = 1.7;
+            const interval = 16; // ~60fps
 
-            function step(now) {
-              if (now - lastTime < interval) {
-                requestAnimationFrame(step);
-                return;
-              }
-              lastTime = now;
-              video.currentTime = Math.max(0, video.currentTime - (1 / fps) * 2.0); // Ускоряем в 2 раза
+            const reverseInterval = setInterval(() => {
+              video.currentTime -= (interval / 1000) * reverseSpeed;
               if (video.currentTime <= 0) {
+                clearInterval(reverseInterval);
+                video.currentTime = 0;
                 video.pause();
-                resolve();
-              } else {
-                requestAnimationFrame(step);
+                fadeOut(video).then(() => {
+                  current = null;
+                  resolve();
+                });
               }
-            }
-            requestAnimationFrame(step);
+            }, interval);
           });
-          fadeOut(current.el);
-          current = null;
         }
 
         const next = pickNext();
-        lastId = next.id; current = next;
-        stopAll(); hidePoster();
-        if (next.el.readyState < 2) {
-          try { await next.el.play(); } catch { }
+        lastId = next.id;
+        current = next;
+
+        // Останавливаем все остальные видео
+        clips.forEach(c => {
+          if (c.id !== next.id) {
+            c.el.pause();
+            c.el.currentTime = 0;
+            c.el.style.opacity = '0';
+          }
+        });
+
+        hidePoster();
+
+        const videoToPlay = next.el;
+        videoToPlay.playbackRate = 1.0;
+        videoToPlay.currentTime = 0;
+
+        // Удаляем старый обработчик, чтобы избежать дублирования
+        const oldOnEnded = videoToPlay.listeners?.ended?.[0];
+        if (oldOnEnded) {
+          videoToPlay.removeEventListener('ended', oldOnEnded);
         }
-        next.el.currentTime = 0;
-        next.el.playbackRate = 1.0; // Убедимся, что скорость нормальная
-        next.el.play().catch(() => { });
-        fadeIn(next.el);
-        showOverlayFor(next.id);
+        
+        const onPlayEnd = () => {
+          onEnded();
+          videoToPlay.removeEventListener('ended', onPlayEnd);
+        };
+        videoToPlay.addEventListener('ended', onPlayEnd, { once: true });
+
+
+        try {
+          await videoToPlay.play();
+          fadeIn(videoToPlay);
+          showOverlayFor(next.id);
+        } catch (e) {
+          console.error("Ошибка воспроизведения:", e);
+          againBtn.disabled = false; // Разблокируем кнопку в случае ошибки
+        }
       }
 
       againBtn.addEventListener('click', playNext);
