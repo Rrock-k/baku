@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="ru">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Baku Card</title>
+  <meta name="description" content="Открытка с плюшевым мишкой Baku: букет, лист с поздравлением, сердечко." />
+  <meta property="og:type" content="website" />
+  <meta property="og:title" content="Baku Card" />
+  <meta property="og:description" content="Открытка с плюшевым мишкой Baku: букет, лист с поздравлением, сердечко." />
+  <meta property="og:image" content="poster.png" />
+  <meta name="theme-color" content="#ffffff" />
+
+  <!-- Preload poster and videos for snappy playback -->
+  <link rel="preload" as="image" href="poster.png" fetchpriority="high" />
+  <link rel="preload" as="video" href="bouquet.mp4" type="video/mp4" />
+  <link rel="preload" as="video" href="paper.mp4" type="video/mp4" />
+  <link rel="preload" as="video" href="heart.mp4" type="video/mp4" />
+
+  <style>
+    ` :root {
+      --bg: #f8f8f8;
+      --fg: #0f0f0f;
+      --btn: #111;
+      --btn-fg: #fff;
+      --accent: #ff85a1;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      height: 100%;
+    }
+
+    body {
+      margin: 0;
+      background: var(--bg);
+      color: var(--fg);
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Inter, "Noto Sans", Arial, sans-serif;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+      display: grid;
+      place-items: center;
+      gap: 16px;
+    }
+
+    .wrap {
+      width: min(100vw, 480px);
+      padding: env(safe-area-inset-top) 12px env(safe-area-inset-bottom);
+    }
+
+    .stage {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 9/16;
+      border-radius: 16px;
+      overflow: hidden;
+      background: #000;
+      box-shadow: 0 10px 40px rgba(0, 0, 0, .15);
+    }
+
+    .poster,
+    video {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      display: block;
+    }
+
+    .poster {
+      opacity: 1;
+      transition: opacity 250ms linear;
+    }
+
+    video {
+      opacity: 0;
+      transition: opacity 200ms linear;
+    }
+
+    .overlayText {
+      position: absolute;
+      left: 50%;
+      top: 63%;
+      transform: translate(-50%, -50%);
+      width: 72%;
+      padding: 10px 12px;
+      text-align: center;
+      background: rgba(255, 255, 255, 0.85);
+      border-radius: 8px;
+      font-size: clamp(14px, 2.6vw, 20px);
+      line-height: 1.25;
+      font-weight: 600;
+      color: #222;
+      text-wrap: balance;
+      filter: drop-shadow(0 2px 6px rgba(0, 0, 0, .2));
+      opacity: 0;
+      transition: opacity 180ms ease-out;
+      /* Tip: при необходимости сдвинь положение под свой клип */
+    }
+
+    .controls {
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      margin-top: 12px;
+    }
+
+    button {
+      -webkit-tap-highlight-color: transparent;
+      cursor: pointer;
+      border: 0;
+      border-radius: 999px;
+      padding: 12px 18px;
+      font-size: 16px;
+      font-weight: 600;
+      background: var(--btn);
+      color: var(--btn-fg);
+      box-shadow: 0 6px 18px rgba(0, 0, 0, .12);
+    }
+
+    .hint {
+      text-align: center;
+      font-size: 12px;
+      opacity: .6;
+      margin-top: 8px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="wrap">
+    <div class="stage" id="stage">
+      <img id="poster" class="poster" src="poster.png" alt="Baku poster" />
+
+      <!-- Видеодорожки. MP4 обязателен для iOS -->
+      <video id="v-bouquet" playsinline muted preload="auto" poster="poster.png"></video>
+      <video id="v-paper" playsinline muted preload="auto" poster="poster.png"></video>
+      <video id="v-heart" playsinline muted preload="auto" poster="poster.png"></video>
+
+      <!-- Надпись поверх листа (показывается только во время клипа paper) -->
+      <div id="overlayText" class="overlayText"></div>
+    </div>
+
+    <div class="controls">
+      <button id="againBtn">Ещё раз</button>
+    </div>
+    <div class="hint" id="hint">Автовоспроизведение без звука поддерживается на большинстве устройств</div>
+  </div>
+
+  <script>
+    (function () {
+      const qs = new URLSearchParams(location.search);
+      const lang = qs.get('lang') || 'ru';
+      const msg = qs.get('msg') || '';
+
+      const STR = {
+        ru: { again: 'Ещё раз', hint: 'Автовоспроизведение без звука поддерживается на большинстве устройств' },
+        en: { again: 'Again', hint: 'Autoplay without sound works on most devices' }
+      };
+
+      // UI i18n
+      document.getElementById('againBtn').textContent = (STR[lang] || STR.ru).again;
+      document.getElementById('hint').textContent = (STR[lang] || STR.ru).hint;
+
+      // Map клипов
+      const clips = [
+        { id: 'bouquet', el: document.getElementById('v-bouquet'), src: 'bouquet.mp4', weight: 1 },
+        { id: 'paper', el: document.getElementById('v-paper'), src: 'paper.mp4', weight: 1 },
+        { id: 'heart', el: document.getElementById('v-heart'), src: 'heart.mp4', weight: 1 }
+      ];
+
+      // Поддержка WebM (не для iOS). Если рядом лежат webm — можно указать.
+      const webmAlt = {
+        // bouquet: 'bouquet.webm',
+        // paper: 'paper.webm',
+        // heart: 'heart.webm'
+      };
+
+      // Ленивая инициализация источников (избегаем двойной загрузки постера)
+      for (const c of clips) {
+        const canWebm = !!document.createElement('video').canPlayType('video/webm; codecs="vp9,vorbis"');
+        const preferred = (canWebm && webmAlt[c.id]) ? webmAlt[c.id] : c.src;
+        const source = document.createElement('source');
+        source.src = preferred;
+        c.el.appendChild(source);
+        c.el.muted = true; c.el.playsInline = true; c.el.setAttribute('playsinline', '');
+        c.el.addEventListener('ended', onEnded);
+        c.el.addEventListener('error', (e) => console.warn('Video error', c.id, e));
+      }
+
+      const poster = document.getElementById('poster');
+      const overlay = document.getElementById('overlayText');
+      const againBtn = document.getElementById('againBtn');
+
+      // Рендер текста для клипа paper
+      overlay.textContent = msg;
+      overlay.style.display = msg ? 'block' : 'none';
+
+      let lastId = null;
+      let current = null;
+
+      function pickNext () {
+        // исключаем повтор предыдущего
+        const pool = clips.filter(c => c.id !== lastId);
+        return pool[Math.floor(Math.random() * pool.length)];
+      }
+
+      async function fadeIn (el) { el.style.transition = 'opacity 200ms linear'; el.style.opacity = '1'; }
+      async function fadeOut (el) { el.style.transition = 'opacity 200ms linear'; el.style.opacity = '0'; }
+
+      function showPoster () { poster.style.opacity = '1'; }
+      function hidePoster () { poster.style.opacity = '0'; }
+
+      function showOverlayFor (id) {
+        if (id === 'paper' && msg) { overlay.style.opacity = '1'; }
+      }
+      function hideOverlay () { overlay.style.opacity = '0'; }
+
+      function stopAll () {
+        for (const c of clips) { c.el.pause(); c.el.currentTime = 0; c.el.style.opacity = '0'; }
+      }
+
+      function onEnded () {
+        // Возвращаемся в idle (постер)
+        hideOverlay();
+        fadeOut(current.el);
+        setTimeout(showPoster, 180);
+        current = null;
+      }
+
+      async function playNext () {
+        const next = pickNext();
+        lastId = next.id; current = next;
+        stopAll(); hidePoster();
+        if (next.el.readyState < 2) {
+          try { await next.el.play(); } catch { }
+        }
+        next.el.currentTime = 0;
+        next.el.play().catch(() => { });
+        fadeIn(next.el);
+        showOverlayFor(next.id);
+      }
+
+      againBtn.addEventListener('click', playNext);
+
+      // Автовоспроизведение при входе
+      (async () => {
+        // Небольшая задержка чтобы постер точно показался
+        setTimeout(playNext, 200);
+      })();
+
+    })();
+  </script>
+</body>
+
+</html>
