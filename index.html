@@ -155,6 +155,7 @@
     </div>
 
     <div class="controls">
+      <button id="rewindBtn">На начало</button>
       <button id="againBtn">Ещё раз</button>
     </div>
     <div class="hint" id="hint">Автовоспроизведение без звука поддерживается на большинстве устройств</div>
@@ -167,11 +168,12 @@
       const msg = qs.get('msg') || '';
 
       const STR = {
-        ru: { again: 'Ещё раз', hint: 'Автовоспроизведение без звука поддерживается на большинстве устройств' },
-        en: { again: 'Again', hint: 'Autoplay without sound works on most devices' }
+        ru: { again: 'Ещё раз', rewind: 'На начало', hint: 'Автовоспроизведение без звука поддерживается на большинстве устройств' },
+        en: { again: 'Again', rewind: 'Rewind', hint: 'Autoplay without sound works on most devices' }
       };
 
       // UI i18n
+      document.getElementById('rewindBtn').textContent = (STR[lang] || STR.ru).rewind;
       document.getElementById('againBtn').textContent = (STR[lang] || STR.ru).again;
       document.getElementById('hint').textContent = (STR[lang] || STR.ru).hint;
 
@@ -203,6 +205,7 @@
 
       const poster = document.getElementById('poster');
       const overlay = document.getElementById('overlayText');
+      const rewindBtn = document.getElementById('rewindBtn');
       const againBtn = document.getElementById('againBtn');
 
       // Рендер текста для клипа paper
@@ -251,9 +254,62 @@
       }
 
       function onEnded () {
-        // Застываем на последнем кадре и включаем кнопку
+        // Застываем на последнем кадре и включаем кнопки
         hideOverlay();
-        againBtn.disabled = false; // Разблокируем кнопку после завершения видео
+        rewindBtn.disabled = false; // Разблокируем кнопку перемотки
+        againBtn.disabled = false;  // Разблокируем кнопку "Ещё раз"
+      }
+
+      async function rewindToStart () {
+        // Предотвращаем повторные вызовы во время обратного воспроизведения
+        if (isReversing) {
+          return;
+        }
+
+        // Блокируем кнопки сразу при клике
+        rewindBtn.disabled = true;
+        againBtn.disabled = true;
+
+        if (current && current.el.currentTime > 0) {
+          // Очищаем предыдущий интервал если он существует
+          if (reverseInterval) {
+            clearInterval(reverseInterval);
+            reverseInterval = null;
+          }
+
+          isReversing = true;
+
+          // Проигрываем текущее видео назад до начала
+          await new Promise(resolve => {
+            const video = current.el;
+            const reverseSpeed = 2.0;
+            const interval = 50; // 20fps для лучшей производительности
+
+            reverseInterval = setInterval(() => {
+              const newTime = video.currentTime - (interval / 1000) * reverseSpeed;
+
+              if (newTime <= 0) {
+                clearInterval(reverseInterval);
+                reverseInterval = null;
+                video.currentTime = 0;
+                video.pause();
+
+                // НЕ скрываем видео - оставляем первый кадр видимым
+                current = null;
+                isReversing = false;
+                rewindBtn.disabled = false; // Разблокируем кнопку перемотки
+                againBtn.disabled = false;  // Разблокируем кнопку "Ещё раз"
+                resolve();
+              } else {
+                video.currentTime = newTime;
+              }
+            }, interval);
+          });
+        } else {
+          // Если видео уже в начале или нет текущего видео
+          rewindBtn.disabled = false;
+          againBtn.disabled = false;
+        }
       }
 
       async function playNext () {
@@ -262,7 +318,8 @@
           return;
         }
 
-        // Блокируем кнопку сразу при клике
+        // Блокируем кнопки сразу при клике
+        rewindBtn.disabled = true;
         againBtn.disabled = true;
 
         if (current && current.el.currentTime > 0) {
@@ -318,27 +375,50 @@
         hidePoster();
 
         try {
-          // Показываем новое видео мгновенно, не ждем готовности
-          videoToPlay.style.opacity = '1'; // Сначала показываем
+          // Ждем готовности видео перед показом
+          if (videoToPlay.readyState < 3) { // HAVE_FUTURE_DATA
+            await new Promise(resolve => {
+              const onCanPlay = () => {
+                videoToPlay.removeEventListener('canplay', onCanPlay);
+                resolve();
+              };
+              videoToPlay.addEventListener('canplay', onCanPlay);
+            });
+          }
 
-          // Сразу скрываем остальные видео
-          clips.forEach(c => {
-            if (c.id !== next.id) {
-              c.el.pause();
-              c.el.currentTime = 0;
-              c.el.style.opacity = '0';
-            }
-          });
-
-          // Запускаем воспроизведение
+          // Запускаем воспроизведение нового видео
           await videoToPlay.play();
+
+          // Показываем новое видео только после начала воспроизведения
+          videoToPlay.style.opacity = '1';
           showOverlayFor(next.id);
+
+          // Задержка чтобы новое видео точно показало первый кадр
+          setTimeout(() => {
+            // Только после запуска нового видео скрываем остальные
+            clips.forEach(c => {
+              if (c.id !== next.id) {
+                c.el.pause();
+                c.el.currentTime = 0;
+                c.el.style.opacity = '0';
+              }
+            });
+          }, 200);
 
         } catch (e) {
           console.error("Ошибка воспроизведения:", e);
-          againBtn.disabled = false; // Разблокируем кнопку в случае ошибки
+          rewindBtn.disabled = false; // Разблокируем кнопку перемотки в случае ошибки
+          againBtn.disabled = false;  // Разблокируем кнопку "Ещё раз" в случае ошибки
         }
       }
+
+      rewindBtn.addEventListener('click', () => {
+        // Дополнительная защита от множественных кликов
+        if (rewindBtn.disabled || isReversing) {
+          return;
+        }
+        rewindToStart();
+      });
 
       againBtn.addEventListener('click', () => {
         // Дополнительная защита от множественных кликов
