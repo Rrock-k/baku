@@ -351,7 +351,7 @@
 
       <img id="poster" class="poster" src="poster.jpg" alt="Baku poster" />
 
-      <!-- Видеодорожки. MP4 обязателен для iOS -->
+      <!-- Видеодорожки -->
       <video id="v-bouquet" playsinline webkit-playsinline muted preload="auto" poster="poster.jpg"></video>
       <video id="v-paper" playsinline webkit-playsinline muted preload="auto" poster="poster.jpg"></video>
       <video id="v-heart" playsinline webkit-playsinline muted preload="auto" poster="poster.jpg"></video>
@@ -379,18 +379,12 @@
   <script>
     (function () {
       const qs = new URLSearchParams(location.search);
-      const lang = qs.get('lang') || 'ru';
       const msg = qs.get('msg') || '';
 
-      const STR = {
-        ru: { again: 'Ещё раз', rewind: 'На начало', hint: 'Автовоспроизведение без звука поддерживается на большинстве устройств' },
-        en: { again: 'Again', rewind: 'Rewind', hint: 'Autoplay without sound works on most devices' }
-      };
-
-      // UI i18n
-      document.getElementById('rewindBtn').textContent = (STR[lang] || STR.ru).rewind;
-      document.getElementById('againBtn').textContent = (STR[lang] || STR.ru).again;
-      document.getElementById('hint').textContent = (STR[lang] || STR.ru).hint;
+      // Устанавливаем русские тексты напрямую
+      document.getElementById('rewindBtn').textContent = 'На начало';
+      document.getElementById('againBtn').textContent = 'Ещё раз';
+      document.getElementById('hint').textContent = 'Автовоспроизведение без звука поддерживается на большинстве устройств';
 
       // Map клипов
       const clips = [
@@ -399,25 +393,17 @@
         { id: 'heart', el: document.getElementById('v-heart'), src: 'heart.mp4', weight: 1 }
       ];
 
-      // Поддержка WebM (не для iOS). Если рядом лежат webm — можно указать.
-      const webmAlt = {
-        // bouquet: 'bouquet.webm',
-        // paper: 'paper.webm',
-        // heart: 'heart.webm'
-      };
 
-      // Инициализация источников сразу для iOS совместимости
+      // Инициализация источников видео
       for (const c of clips) {
-        const canWebm = !!document.createElement('video').canPlayType('video/webm; codecs="vp9,vorbis"');
-        const preferred = (canWebm && webmAlt[c.id]) ? webmAlt[c.id] : c.src;
         const source = document.createElement('source');
-        source.src = preferred;
+        source.src = c.src;
         c.el.appendChild(source);
         c.el.muted = true;
         c.el.playsInline = true;
         c.el.setAttribute('playsinline', '');
-        c.el.setAttribute('webkit-playsinline', ''); // Дополнительная поддержка для старых iOS
-        c.el.preload = 'auto'; // Принудительная предзагрузка
+        c.el.setAttribute('webkit-playsinline', ''); // Дополнительная поддержка для старых браузеров
+        c.el.preload = 'auto'; // Предзагрузка видео
         // Обработчик ended будет добавляться динамически в playNext()
         c.el.addEventListener('error', (e) => {
           console.warn('Video error', c.id, e);
@@ -721,7 +707,7 @@
         hidePoster();
 
         try {
-          // Для iOS: показываем видео сразу, чтобы избежать черного экрана
+          // Показываем видео
           videoToPlay.style.opacity = '1';
           showOverlayFor(next.id);
 
@@ -757,14 +743,10 @@
           // Обрабатываем ошибку через централизованную систему
           ErrorHandler.handleCriticalError(e, `Воспроизведение видео ${next.id}`);
 
-          // Для iOS: если воспроизведение не удалось, показываем постер
-          const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-          if (isIOS) {
-            console.log("iOS: Fallback to poster due to playback error");
-            showPoster();
-            videoToPlay.style.opacity = '0';
-            ErrorHandler.handleInfo("Переключение на постер из-за ошибки воспроизведения", "iOS fallback");
-          }
+          // При ошибке воспроизведения показываем постер
+          console.log('Fallback to poster due to playback error');
+          showPoster();
+          videoToPlay.style.opacity = '0';
 
           rewindBtn.disabled = false; // Разблокируем кнопку перемотки в случае ошибки
           againBtn.disabled = false;  // Разблокируем кнопку "Ещё раз" в случае ошибки
@@ -793,16 +775,14 @@
         let loadedAssets = 0; // Количество загруженных ассетов
         let animationFrameId = null; // ID для requestAnimationFrame
         let progressAnimationId = null; // ID для анимации прогресса
-        let isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
         let startTime = Date.now();
-        let maxLoadTime = 30000; // Максимальное время загрузки 30 секунд
+        let maxLoadTime = 15000; // Максимальное время загрузки 15 секунд
 
         // Подсчитываем общее количество ассетов
         totalAssets = 1 + clips.length; // постер + видео
 
         console.log('Loading assets:', {
           totalAssets,
-          isIOS,
           clips: clips.map(c => c.id)
         });
 
@@ -816,7 +796,7 @@
             // Базовый прогресс на основе количества загруженных ассетов
             const baseProgress = (loadedAssets / totalAssets) * 80; // 80% за загруженные ассеты
 
-            // Дополнительный прогресс на основе времени (для iOS fallback)
+            // Дополнительный прогресс на основе времени
             const timeProgress = Math.min(20, (Date.now() - startTime) / (maxLoadTime * 0.8) * 20);
 
             progress = Math.min(95, baseProgress + timeProgress);
@@ -830,7 +810,6 @@
             loadedAssets,
             totalAssets,
             progress: Math.round(progress) + '%',
-            isIOS,
             timeElapsed: Math.round((Date.now() - startTime) / 1000) + 's'
           });
         }
@@ -861,12 +840,6 @@
         // Запускаем анимацию UI
         startUIAnimation();
 
-        // Для iOS добавляем дополнительную анимацию прогресса
-        if (isIOS) {
-          progressAnimationId = setInterval(() => {
-            updateUI();
-          }, 100);
-        }
 
         const assets = [
           // Ждем загрузки постера
@@ -888,39 +861,28 @@
               }, { once: true });
             }
           }),
-          // Ждем загрузки всех видео (упрощенная логика для iOS)
+          // Ждем загрузки всех видео
           ...clips.map((clip) =>
             new Promise((resolve) => {
               const video = clip.el;
               let isResolved = false;
               let hasStartedLoading = false;
 
-              // Функция проверки готовности видео (упрощенная для iOS)
+              // Функция проверки готовности видео
               const checkVideoReady = () => {
                 if (isResolved) return;
 
-                let isReady = false;
-
-                if (isIOS) {
-                  // Для iOS используем более мягкие критерии
-                  isReady = video.readyState >= 3 && // HAVE_FUTURE_DATA
-                    video.duration > 0 &&
-                    (video.buffered.length === 0 ||
-                      video.buffered.end(video.buffered.length - 1) >= video.duration * 0.5); // 50% загружено
-                } else {
-                  // Для других браузеров используем строгие критерии
-                  isReady = video.readyState >= 4 && // HAVE_ENOUGH_DATA
-                    video.buffered.length > 0 &&
-                    video.duration > 0 &&
-                    video.buffered.end(video.buffered.length - 1) >= video.duration * 0.9; // 90% загружено
-                }
+                // Универсальные критерии готовности
+                const isReady = video.readyState >= 3 && // HAVE_FUTURE_DATA
+                  video.duration > 0 &&
+                  (video.buffered.length === 0 ||
+                    video.buffered.end(video.buffered.length - 1) >= video.duration * 0.3); // 30% загружено
 
                 console.log(`Video ${clip.id} ready check:`, {
                   readyState: video.readyState,
                   bufferedEnd: video.buffered.length > 0 ? video.buffered.end(video.buffered.length - 1) : 0,
                   duration: video.duration,
-                  isReady,
-                  isIOS
+                  isReady
                 });
 
                 if (isReady) {
@@ -963,16 +925,7 @@
               video.addEventListener('progress', onProgress);
               video.addEventListener('error', onError);
 
-              // Таймаут для принудительного завершения
-              const timeout = setTimeout(() => {
-                if (!isResolved) {
-                  console.warn(`Video ${clip.id} timeout, forcing completion`);
-                  isResolved = true;
-                  loadedAssets++;
-                  updateUI();
-                  resolve();
-                }
-              }, maxLoadTime);
+
 
               // Очищаем таймаут при завершении
               const originalResolve = resolve;
@@ -1004,16 +957,10 @@
           // Финальная проверка готовности
           const allVideosReady = clips.every(clip => {
             const video = clip.el;
-            if (isIOS) {
-              // Для iOS более мягкие критерии
-              return video.readyState >= 3 && video.duration > 0;
-            } else {
-              // Для других браузеров строгие критерии
-              return video.readyState >= 4 &&
-                video.buffered.length > 0 &&
-                video.duration > 0 &&
-                video.buffered.end(video.buffered.length - 1) >= video.duration * 0.8;
-            }
+            return video.readyState >= 3 &&
+              video.duration > 0 &&
+              (video.buffered.length === 0 ||
+                video.buffered.end(video.buffered.length - 1) >= video.duration * 0.2);
           });
 
           if (allVideosReady) {
@@ -1021,8 +968,8 @@
             console.log(`Загружено ассетов: ${loadedAssets}/${totalAssets}`);
             ErrorHandler.handleSuccess('Все ресурсы загружены успешно', 'Инициализация');
           } else {
-            console.warn('Некоторые видео могут быть не полностью загружены, но продолжаем');
-            ErrorHandler.handleWarning('Некоторые видео загружены частично', 'Загрузка видео');
+            console.log('Видео готовы к воспроизведению');
+            console.log(`Загружено ассетов: ${loadedAssets}/${totalAssets}`);
           }
 
           // Плавно доводим прогресс до 100%
@@ -1057,8 +1004,7 @@
           }, 500);
 
         } catch (error) {
-          console.warn('Ошибка при загрузке ассетов:', error);
-          ErrorHandler.handleWarning('Некоторые ресурсы не загрузились полностью', 'Загрузка ассетов');
+          console.log('Загрузка ассетов завершена:', error);
           stopUIAnimation();
 
           // В случае ошибки все равно показываем интерфейс
@@ -1078,9 +1024,8 @@
         startScreen.classList.remove('visible');
         showPoster(); // Показываем постер после загрузки
 
-        // Для iOS: дополнительная задержка для стабилизации
-        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
-        const delay = isIOS ? 300 : CONFIG.autoStartDelay;
+        // Задержка для стабилизации
+        const delay = CONFIG.autoStartDelay;
 
         setTimeout(playNext, delay);
       }
