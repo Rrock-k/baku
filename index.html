@@ -9,11 +9,11 @@
   <meta property="og:type" content="website" />
   <meta property="og:title" content="Baku Card" />
   <meta property="og:description" content="Открытка с плюшевым мишкой Baku: букет, лист с поздравлением, сердечко." />
-  <meta property="og:image" content="poster.png" />
+  <meta property="og:image" content="poster.jpg" />
   <meta name="theme-color" content="#ffffff" />
 
   <!-- Preload poster and videos for snappy playback -->
-  <link rel="preload" as="image" href="poster.png" fetchpriority="high" />
+  <link rel="preload" as="image" href="poster.jpg" fetchpriority="high" />
   <link rel="preload" as="video" href="bouquet.mp4" type="video/mp4" />
   <link rel="preload" as="video" href="paper.mp4" type="video/mp4" />
   <link rel="preload" as="video" href="heart.mp4" type="video/mp4" />
@@ -349,19 +349,19 @@
         <div class="loading-text" id="loadingText">Загрузка...</div>
       </div>
 
-      <img id="poster" class="poster" src="poster.png" alt="Baku poster" />
+      <img id="poster" class="poster" src="poster.jpg" alt="Baku poster" />
 
       <!-- Видеодорожки. MP4 обязателен для iOS -->
-      <video id="v-bouquet" playsinline webkit-playsinline muted preload="auto" poster="poster.png"></video>
-      <video id="v-paper" playsinline webkit-playsinline muted preload="auto" poster="poster.png"></video>
-      <video id="v-heart" playsinline webkit-playsinline muted preload="auto" poster="poster.png"></video>
+      <video id="v-bouquet" playsinline webkit-playsinline muted preload="auto" poster="poster.jpg"></video>
+      <video id="v-paper" playsinline webkit-playsinline muted preload="auto" poster="poster.jpg"></video>
+      <video id="v-heart" playsinline webkit-playsinline muted preload="auto" poster="poster.jpg"></video>
 
       <!-- Надпись поверх листа (показывается только во время клипа paper) -->
       <div id="overlayText" class="overlayText"></div>
 
       <!-- Экран запуска -->
       <div id="startScreen" class="start-screen">
-        <img id="startPoster" class="poster" src="poster.png" alt="Baku poster" />
+        <img id="startPoster" class="poster" src="poster.jpg" alt="Baku poster" />
         <button id="startBtn" class="start-btn">Начать</button>
       </div>
     </div>
