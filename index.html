@@ -267,6 +267,74 @@
     .start-btn:active {
       transform: translateY(0);
     }
+
+    /* Система тостов для ошибок */
+    .toast-container {
+      position: fixed;
+      top: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1000;
+      pointer-events: none;
+    }
+
+    .toast {
+      background: rgba(220, 38, 38, 0.95);
+      color: white;
+      padding: 12px 20px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 500;
+      margin-bottom: 8px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+      backdrop-filter: blur(10px);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      opacity: 0;
+      transform: translateY(-20px);
+      transition: all 0.3s ease;
+      pointer-events: auto;
+      max-width: 90vw;
+      text-align: center;
+      word-wrap: break-word;
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .toast.hide {
+      opacity: 0;
+      transform: translateY(-20px);
+    }
+
+    .toast.warning {
+      background: rgba(245, 158, 11, 0.95);
+    }
+
+    .toast.info {
+      background: rgba(59, 130, 246, 0.95);
+    }
+
+    .toast.success {
+      background: rgba(34, 197, 94, 0.95);
+    }
+
+    .toast-close {
+      background: none;
+      border: none;
+      color: white;
+      font-size: 18px;
+      cursor: pointer;
+      margin-left: 12px;
+      padding: 0;
+      opacity: 0.7;
+      transition: opacity 0.2s ease;
+    }
+
+    .toast-close:hover {
+      opacity: 1;
+    }
   </style>
 </head>
 
@@ -284,9 +352,9 @@
       <img id="poster" class="poster" src="poster.png" alt="Baku poster" />
 
       <!-- Видеодорожки. MP4 обязателен для iOS -->
-      <video id="v-bouquet" playsinline muted preload="auto" poster="poster.png"></video>
-      <video id="v-paper" playsinline muted preload="auto" poster="poster.png"></video>
-      <video id="v-heart" playsinline muted preload="auto" poster="poster.png"></video>
+      <video id="v-bouquet" playsinline webkit-playsinline muted preload="auto" poster="poster.png"></video>
+      <video id="v-paper" playsinline webkit-playsinline muted preload="auto" poster="poster.png"></video>
+      <video id="v-heart" playsinline webkit-playsinline muted preload="auto" poster="poster.png"></video>
 
       <!-- Надпись поверх листа (показывается только во время клипа paper) -->
       <div id="overlayText" class="overlayText"></div>
@@ -304,6 +372,9 @@
     </div>
     <div class="hint" id="hint">Автовоспроизведение без звука поддерживается на большинстве устройств</div>
   </div>
+
+  <!-- Контейнер для тостов -->
+  <div id="toastContainer" class="toast-container"></div>
 
   <script>
     (function () {
@@ -335,16 +406,23 @@
         // heart: 'heart.webm'
       };
 
-      // Ленивая инициализация источников (избегаем двойной загрузки постера)
+      // Инициализация источников сразу для iOS совместимости
       for (const c of clips) {
         const canWebm = !!document.createElement('video').canPlayType('video/webm; codecs="vp9,vorbis"');
         const preferred = (canWebm && webmAlt[c.id]) ? webmAlt[c.id] : c.src;
         const source = document.createElement('source');
         source.src = preferred;
         c.el.appendChild(source);
-        c.el.muted = true; c.el.playsInline = true; c.el.setAttribute('playsinline', '');
+        c.el.muted = true;
+        c.el.playsInline = true;
+        c.el.setAttribute('playsinline', '');
+        c.el.setAttribute('webkit-playsinline', ''); // Дополнительная поддержка для старых iOS
+        c.el.preload = 'auto'; // Принудительная предзагрузка
         // Обработчик ended будет добавляться динамически в playNext()
-        c.el.addEventListener('error', (e) => console.warn('Video error', c.id, e));
+        c.el.addEventListener('error', (e) => {
+          console.warn('Video error', c.id, e);
+          ErrorHandler.handleCriticalError(e, `Видео ${c.id}`);
+        });
       }
 
       const poster = document.getElementById('poster');
@@ -357,6 +435,7 @@
       const loadingText = document.getElementById('loadingText');
       const startScreen = document.getElementById('startScreen');
       const startBtn = document.getElementById('startBtn');
+      const toastContainer = document.getElementById('toastContainer');
 
       // Рендер текста для клипа paper
       overlay.textContent = msg;
@@ -366,6 +445,104 @@
       let current = null;
       let reverseInterval = null; // Отслеживание активного интервала обратного воспроизведения
       let isReversing = false; // Флаг для предотвращения повторных вызовов
+
+      // ===== СИСТЕМА ОБРАБОТКИ ОШИБОК =====
+      const ErrorHandler = {
+        // Типы ошибок
+        TYPES: {
+          CRITICAL: 'critical',
+          WARNING: 'warning',
+          INFO: 'info',
+          SUCCESS: 'success'
+        },
+
+        // Показ тоста
+        showToast (message, type = 'critical', duration = 5000) {
+          const toast = document.createElement('div');
+          toast.className = `toast ${type}`;
+
+          const closeBtn = document.createElement('button');
+          closeBtn.className = 'toast-close';
+          closeBtn.innerHTML = '×';
+          closeBtn.onclick = () => this.hideToast(toast);
+
+          toast.innerHTML = message;
+          toast.appendChild(closeBtn);
+
+          toastContainer.appendChild(toast);
+
+          // Анимация появления
+          setTimeout(() => toast.classList.add('show'), 10);
+
+          // Автоматическое скрытие
+          if (duration > 0) {
+            setTimeout(() => this.hideToast(toast), duration);
+          }
+
+          return toast;
+        },
+
+        // Скрытие тоста
+        hideToast (toast) {
+          toast.classList.remove('show');
+          toast.classList.add('hide');
+          setTimeout(() => {
+            if (toast.parentNode) {
+              toast.parentNode.removeChild(toast);
+            }
+          }, 300);
+        },
+
+        // Обработка критических ошибок
+        handleCriticalError (error, context = '') {
+          console.error('КРИТИЧЕСКАЯ ОШИБКА:', error, context);
+
+          let message = 'Произошла критическая ошибка';
+
+          if (error.name === 'NotAllowedError') {
+            message = 'Воспроизведение заблокировано браузером. Попробуйте нажать "Ещё раз"';
+          } else if (error.name === 'NotSupportedError') {
+            message = 'Формат видео не поддерживается';
+          } else if (error.message) {
+            message = `Ошибка: ${error.message}`;
+          }
+
+          if (context) {
+            message += ` (${context})`;
+          }
+
+          this.showToast(message, this.TYPES.CRITICAL, 8000);
+        },
+
+        // Обработка предупреждений
+        handleWarning (message, context = '') {
+          console.warn('ПРЕДУПРЕЖДЕНИЕ:', message, context);
+          this.showToast(`⚠️ ${message}`, this.TYPES.WARNING, 4000);
+        },
+
+        // Обработка информационных сообщений
+        handleInfo (message, context = '') {
+          console.info('ИНФО:', message, context);
+          this.showToast(`ℹ️ ${message}`, this.TYPES.INFO, 3000);
+        },
+
+        // Обработка успешных операций
+        handleSuccess (message, context = '') {
+          console.log('УСПЕХ:', message, context);
+          this.showToast(`✅ ${message}`, this.TYPES.SUCCESS, 2000);
+        }
+      };
+
+      // Глобальный обработчик необработанных ошибок
+      window.addEventListener('error', (event) => {
+        ErrorHandler.handleCriticalError(event.error || new Error(event.message), 'Глобальная ошибка');
+      });
+
+      // Обработчик необработанных промисов
+      window.addEventListener('unhandledrejection', (event) => {
+        ErrorHandler.handleCriticalError(new Error(event.reason), 'Необработанный промис');
+      });
+      // =====================================
 
       // ===== НАСТРОЙКИ =====
       const CONFIG = {
@@ -544,7 +721,11 @@
         hidePoster();
 
         try {
-          // Ждем готовности видео перед показом
+          // Для iOS: показываем видео сразу, чтобы избежать черного экрана
+          videoToPlay.style.opacity = '1';
+          showOverlayFor(next.id);
+
+          // Ждем готовности видео перед воспроизведением
           if (videoToPlay.readyState < 3) { // HAVE_FUTURE_DATA
             await new Promise(resolve => {
               const onCanPlay = () => {
@@ -557,10 +738,6 @@
 
           // Запускаем воспроизведение нового видео
           await videoToPlay.play();
-
-          // Показываем новое видео только после начала воспроизведения
-          videoToPlay.style.opacity = '1';
-          showOverlayFor(next.id);
 
           // Задержка чтобы новое видео точно показало первый кадр
           setTimeout(() => {
@@ -576,6 +753,19 @@
 
         } catch (e) {
           console.error("Ошибка воспроизведения:", e);
+
+          // Обрабатываем ошибку через централизованную систему
+          ErrorHandler.handleCriticalError(e, `Воспроизведение видео ${next.id}`);
+
+          // Для iOS: если воспроизведение не удалось, показываем постер
+          const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+          if (isIOS) {
+            console.log("iOS: Fallback to poster due to playback error");
+            showPoster();
+            videoToPlay.style.opacity = '0';
+            ErrorHandler.handleInfo("Переключение на постер из-за ошибки воспроизведения", "iOS fallback");
+          }
+
           rewindBtn.disabled = false; // Разблокируем кнопку перемотки в случае ошибки
           againBtn.disabled = false;  // Разблокируем кнопку "Ещё раз" в случае ошибки
         }
@@ -692,7 +882,10 @@
               onLoad();
             } else {
               poster.addEventListener('load', onLoad, { once: true });
-              poster.addEventListener('error', onLoad, { once: true });
+              poster.addEventListener('error', () => {
+                ErrorHandler.handleWarning('Не удалось загрузить постер', 'Загрузка изображения');
+                onLoad();
+              }, { once: true });
             }
           }),
           // Ждем загрузки всех видео (упрощенная логика для iOS)
@@ -744,6 +937,7 @@
                 isResolved = true;
                 loadedAssets++;
                 console.log(`Video ${clip.id} error, treating as completed (${loadedAssets}/${totalAssets})`);
+                ErrorHandler.handleWarning(`Ошибка загрузки видео ${clip.id}`, 'Загрузка видео');
                 updateUI();
                 resolve();
               };
@@ -825,8 +1019,10 @@
           if (allVideosReady) {
             console.log('Все ассеты загружены и готовы к воспроизведению');
             console.log(`Загружено ассетов: ${loadedAssets}/${totalAssets}`);
+            ErrorHandler.handleSuccess('Все ресурсы загружены успешно', 'Инициализация');
           } else {
             console.warn('Некоторые видео могут быть не полностью загружены, но продолжаем');
+            ErrorHandler.handleWarning('Некоторые видео загружены частично', 'Загрузка видео');
           }
 
           // Плавно доводим прогресс до 100%
@@ -852,6 +1048,7 @@
               });
               startPoster.addEventListener('error', () => {
                 console.warn('Start poster failed to load');
+                ErrorHandler.handleWarning('Не удалось загрузить постер для экрана запуска', 'Экран запуска');
                 startScreen.classList.add('visible'); // Показываем экран даже без постера
               });
             } else {
@@ -861,6 +1058,7 @@
 
         } catch (error) {
           console.warn('Ошибка при загрузке ассетов:', error);
+          ErrorHandler.handleWarning('Некоторые ресурсы не загрузились полностью', 'Загрузка ассетов');
           stopUIAnimation();
 
           // В случае ошибки все равно показываем интерфейс
@@ -879,7 +1077,12 @@
       function startApplication () {
         startScreen.classList.remove('visible');
         showPoster(); // Показываем постер после загрузки
-        setTimeout(playNext, CONFIG.autoStartDelay);
+
+        // Для iOS: дополнительная задержка для стабилизации
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        const delay = isIOS ? 300 : CONFIG.autoStartDelay;
+
+        setTimeout(playNext, delay);
       }
 
       // Обработчик клика кнопки "Начать"
