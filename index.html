@@ -279,6 +279,7 @@
           <div class="loading-progress-bar" id="progressBar"></div>
         </div>
         <div class="loading-text" id="loadingText">Загрузка...</div>
+        <div class="loading-details" id="loadingDetails" style="font-size: 12px; opacity: 0.7; margin-top: 8px;"></div>
       </div>
 
       <img id="poster" class="poster" src="poster.jpg" alt="Baku poster" />
@@ -320,17 +321,59 @@
       ];
 
 
-      // Система предзагрузки видео
-      async function preloadVideos (urls) {
-        const blobs = await Promise.all(
-          urls.map(async (url) => {
-            const res = await fetch(url);
-            if (!res.ok) throw new Error(`HTTP ${res.status}`);
-            return { url, blob: await res.blob() };
-          })
-        );
+      // Система предзагрузки с реальным прогрессом
+      async function fetchWithProgress (url, onProgress) {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
-        const items = blobs.map(({ url, blob }) => {
+        const contentLength = +response.headers.get('Content-Length');
+        if (!contentLength) {
+          // Если размер неизвестен, загружаем как обычно
+          const blob = await response.blob();
+          onProgress(blob.size, blob.size);
+          return blob;
+        }
+
+        const reader = response.body.getReader();
+        const chunks = [];
+        let receivedLength = 0;
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          chunks.push(value);
+          receivedLength += value.length;
+          onProgress(receivedLength, contentLength);
+        }
+
+        // Собираем все чанки в один Uint8Array
+        const chunksAll = new Uint8Array(receivedLength);
+        let position = 0;
+        for (const chunk of chunks) {
+          chunksAll.set(chunk, position);
+          position += chunk.length;
+        }
+
+        return new Blob([chunksAll]);
+      }
+
+      async function preloadVideos (urls, onProgress) {
+        const items = [];
+
+        for (let i = 0; i < urls.length; i++) {
+          const url = urls[i];
+          const fileName = url.split('/').pop();
+
+          onProgress(0, 100, `Загрузка ${fileName}...`, `Файл ${i + 1} из ${urls.length}`);
+
+          const blob = await fetchWithProgress(url, (loaded, total) => {
+            const fileProgress = Math.round((loaded / total) * 100);
+            const overallProgress = Math.round(((i + (loaded / total)) / urls.length) * 100);
+            const sizeInfo = `${Math.round(loaded / 1024)}KB / ${Math.round(total / 1024)}KB`;
+            onProgress(overallProgress, 100, `Загрузка ${fileName}... ${fileProgress}%`, sizeInfo);
+          });
+
           const objectUrl = URL.createObjectURL(blob);
           const el = document.createElement("video");
           el.src = objectUrl;
@@ -345,9 +388,13 @@
           el.style.transition = 'opacity 200ms linear';
 
           document.getElementById('stage').appendChild(el);
-          return { url, objectUrl, element: el };
-        });
+          items.push({ url, objectUrl, element: el });
 
+          onProgress(Math.round(((i + 1) / urls.length) * 100), 100, `${fileName} загружен`, 'Обработка видео...');
+        }
+
+        // Ждем готовности всех видео
+        onProgress(90, 100, 'Подготовка видео...', 'Ожидание готовности к воспроизведению');
         await Promise.all(items.map(({ element }) =>
           new Promise(resolve => {
             element.addEventListener("canplaythrough", resolve, { once: true });
@@ -368,6 +415,7 @@
       const loadingIndicator = document.getElementById('loadingIndicator');
       const progressBar = document.getElementById('progressBar');
       const loadingText = document.getElementById('loadingText');
+      const loadingDetails = document.getElementById('loadingDetails');
       const startScreen = document.getElementById('startScreen');
       const startBtn = document.getElementById('startBtn');
 
@@ -546,37 +594,39 @@
 
       async function waitForAssets () {
         let progress = 0;
-        let startTime = Date.now();
+        let currentTask = 'Инициализация...';
 
-        function updateUI () {
-          const timeElapsed = Date.now() - startTime;
-          progress = Math.min(90, (timeElapsed / 3000) * 90);
+        function updateUI (progressValue, task, details) {
+          progress = progressValue;
           progressBar.style.width = `${progress}%`;
-          loadingText.textContent = `Загрузка... ${Math.round(progress)}%`;
+          loadingText.textContent = task || `Загрузка... ${Math.round(progress)}%`;
+          if (details) {
+            loadingDetails.textContent = details;
+          }
         }
 
-        const animate = () => {
-          updateUI();
-          requestAnimationFrame(animate);
-        };
-        animate();
-
         try {
+          // Загружаем постер
+          updateUI(5, 'Загрузка постера...', 'poster.jpg');
           await new Promise(resolve => {
             if (poster.complete) resolve();
             else poster.addEventListener('load', resolve, { once: true });
           });
+          updateUI(10, 'Постер загружен', 'Готов к отображению');
 
+          // Загружаем видео с реальным прогрессом
           const videoUrls = clips.map(c => c.src);
-          const { items } = await preloadVideos(videoUrls);
+          const { items } = await preloadVideos(videoUrls, (progressValue, total, task, details) => {
+            // Масштабируем прогресс видео от 10% до 90%
+            const scaledProgress = 10 + (progressValue / 100) * 80;
+            updateUI(scaledProgress, task, details);
+          });
 
           clips.forEach((clip, index) => {
             clip.el = items[index].element;
           });
 
-          progress = 100;
-          progressBar.style.width = '100%';
-          loadingText.textContent = 'Готово!';
+          updateUI(100, 'Готово!', 'Все ресурсы загружены');
 
           setTimeout(() => {
             loadingIndicator.style.display = 'none';
@@ -586,9 +636,7 @@
 
         } catch (error) {
           console.error('Ошибка загрузки:', error);
-          progress = 100;
-          progressBar.style.width = '100%';
-          loadingText.textContent = 'Готово!';
+          updateUI(100, 'Ошибка загрузки', error.message);
           setTimeout(() => {
             loadingIndicator.style.display = 'none';
             stage.classList.remove('loading');
