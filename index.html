@@ -14,9 +14,9 @@
 
   <!-- Preload poster and videos for snappy playback -->
   <link rel="preload" as="image" href="poster.jpg" fetchpriority="high" />
-  <link rel="preload" as="video" href="bouquet.mp4" type="video/mp4" />
-  <link rel="preload" as="video" href="paper.mp4" type="video/mp4" />
-  <link rel="preload" as="video" href="heart.mp4" type="video/mp4" />
+  <link rel="preload" as="video" href="optimized/bouquet_optimized.mp4" type="video/mp4" />
+  <link rel="preload" as="video" href="optimized/paper_optimized.mp4" type="video/mp4" />
+  <link rel="preload" as="video" href="optimized/heart_optimized.mp4" type="video/mp4" />
 
   <style>
     :root {
@@ -274,9 +274,9 @@
 
       // Map клипов (элементы будут созданы динамически)
       const clips = [
-        { id: 'bouquet', el: null, src: 'bouquet.mp4', weight: 1 },
-        { id: 'paper', el: null, src: 'paper.mp4', weight: 1 },
-        { id: 'heart', el: null, src: 'heart.mp4', weight: 1 }
+        { id: 'bouquet', el: null, src: 'optimized/bouquet_optimized.mp4', weight: 1 },
+        { id: 'paper', el: null, src: 'optimized/paper_optimized.mp4', weight: 1 },
+        { id: 'heart', el: null, src: 'optimized/heart_optimized.mp4', weight: 1 }
       ];
 
 
