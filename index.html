@@ -515,7 +515,11 @@
               video.pause();
               current = null;
               isReversing = false;
-              playNext();
+
+              // Используем setTimeout для обеспечения корректной работы на iPhone
+              setTimeout(() => {
+                playNext();
+              }, 50);
               return;
             } else {
               video.currentTime = newTime;
@@ -538,12 +542,25 @@
 
         videoToPlay.style.opacity = '1';
 
-        videoToPlay.play().catch(e => {
-          console.error('Ошибка воспроизведения:', e);
-          videoToPlay.style.opacity = '0';
-          againScreen.style.display = 'flex';
-          againScreen.classList.add('visible');
-        });
+        // Дополнительная защита для iPhone - ждем готовности видео
+        const playVideo = () => {
+          videoToPlay.play().catch(e => {
+            console.error('Ошибка воспроизведения:', e);
+            videoToPlay.style.opacity = '0';
+            againScreen.style.display = 'flex';
+            againScreen.classList.add('visible');
+          });
+        };
+
+        // Проверяем готовность видео перед воспроизведением
+        if (videoToPlay.readyState >= 3) { // HAVE_FUTURE_DATA
+          playVideo();
+        } else {
+          videoToPlay.addEventListener('canplay', playVideo, { once: true });
+          videoToPlay.addEventListener('loadeddata', playVideo, { once: true });
+          // Fallback на случай если события не сработают
+          setTimeout(playVideo, 100);
+        }
 
         setTimeout(() => {
           clips.forEach(c => {
@@ -557,7 +574,9 @@
       }
 
       nextBtn.addEventListener('click', () => {
-        if (!isReversing) playNext();
+        if (!isReversing) {
+          playNext();
+        }
       });
 
       async function waitForAssets () {
