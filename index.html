@@ -58,7 +58,6 @@
       position: relative;
       width: 100%;
       aspect-ratio: 9/16;
-      border-radius: 16px;
       overflow: hidden;
       background: #000;
       box-shadow: 0 10px 40px rgba(0, 0, 0, .15);
@@ -84,26 +83,6 @@
       transition: opacity 200ms linear;
     }
 
-    .overlayText {
-      position: absolute;
-      left: 50%;
-      top: 63%;
-      transform: translate(-50%, -50%);
-      width: 72%;
-      padding: 10px 12px;
-      text-align: center;
-      background: rgba(255, 255, 255, 0.85);
-      border-radius: 8px;
-      font-size: clamp(14px, 2.6vw, 20px);
-      line-height: 1.25;
-      font-weight: 600;
-      color: #222;
-      text-wrap: balance;
-      filter: drop-shadow(0 2px 6px rgba(0, 0, 0, .2));
-      opacity: 0;
-      transition: opacity 180ms ease-out;
-      /* Tip: при необходимости сдвинь положение под свой клип */
-    }
 
     .controls {
       display: flex;
@@ -221,9 +200,7 @@
     }
 
     .start-screen .poster {
-      border-radius: 12px;
       box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-      margin-bottom: 32px;
       opacity: 1 !important;
       /* Принудительно показываем постер на экране запуска */
       background: #333;
@@ -236,12 +213,12 @@
       font-size: 14px;
     }
 
-    .start-btn {
+    .main-btn {
       background: transparent;
       /* Временный яркий фон для отладки */
       border: 2px solid white;
       color: white;
-      font-size: 18px;
+      font-size: 14px;
       font-weight: 600;
       padding: 16px 32px;
       border-radius: 999px;
@@ -258,13 +235,13 @@
       min-height: 50px;
     }
 
-    .start-btn:hover {
+    .main-btn:hover {
       background: #ff85a263;
       color: white;
       box-shadow: 0 8px 24px rgba(255, 133, 161, 0.4);
     }
 
-    .start-btn:active {
+    .main-btn:active {
       transform: translateY(0);
     }
   </style>
@@ -284,23 +261,14 @@
 
       <img id="poster" class="poster" src="poster.jpg" alt="Baku poster" />
 
-      <!-- Видеодорожки -->
-      <video id="v-bouquet" playsinline webkit-playsinline muted preload="auto" poster="poster.jpg"></video>
-      <video id="v-paper" playsinline webkit-playsinline muted preload="auto" poster="poster.jpg"></video>
-      <video id="v-heart" playsinline webkit-playsinline muted preload="auto" poster="poster.jpg"></video>
 
-      <!-- Надпись поверх листа (показывается только во время клипа paper) -->
-      <div id="overlayText" class="overlayText"></div>
-
-      <!-- Экран запуска -->
       <div id="startScreen" class="start-screen">
         <img id="startPoster" class="poster" src="poster.jpg" alt="Baku poster" />
-        <button id="startBtn" class="start-btn">Начать</button>
+        <button id="startBtn" class="main-btn">Начать</button>
       </div>
 
-      <!-- Кнопка "Ещё раз" в центре экрана -->
       <div id="againScreen" class="start-screen" style="display: none;">
-        <button id="againBtn" class="start-btn">Ещё раз</button>
+        <button id="nextBtn" class="main-btn">Следующее</button>
       </div>
     </div>
   </div>
@@ -309,7 +277,6 @@
   <script>
     (function () {
       const qs = new URLSearchParams(location.search);
-      const msg = qs.get('msg') || '';
 
       // Устанавливаем русские тексты напрямую
 
@@ -408,8 +375,7 @@
 
 
       const poster = document.getElementById('poster');
-      const overlay = document.getElementById('overlayText');
-      const againBtn = document.getElementById('againBtn');
+      const nextBtn = document.getElementById('nextBtn');
       const stage = document.getElementById('stage');
       const loadingIndicator = document.getElementById('loadingIndicator');
       const progressBar = document.getElementById('progressBar');
@@ -419,9 +385,6 @@
       const startBtn = document.getElementById('startBtn');
       const againScreen = document.getElementById('againScreen');
 
-      // Рендер текста для клипа paper
-      overlay.textContent = msg;
-      overlay.style.display = msg ? 'block' : 'none';
 
       let lastId = null;
       let current = null;
@@ -459,8 +422,6 @@
 
       function showPoster () { poster.style.opacity = '1'; }
       function hidePoster () { poster.style.opacity = '0'; }
-      function showOverlay () { if (msg) overlay.style.opacity = '1'; }
-      function hideOverlay () { overlay.style.opacity = '0'; }
 
       function stopAll () {
         if (reverseInterval) {
@@ -476,7 +437,6 @@
       }
 
       function onEnded () {
-        hideOverlay();
         againScreen.style.display = 'flex';
         againScreen.classList.add('visible');
       }
@@ -528,7 +488,6 @@
 
         hidePoster();
         videoToPlay.style.opacity = '1';
-        if (next.id === 'paper') showOverlay();
 
         videoToPlay.play().catch(e => {
           console.error('Ошибка воспроизведения:', e);
@@ -549,7 +508,7 @@
         }, 200);
       }
 
-      againBtn.addEventListener('click', () => {
+      nextBtn.addEventListener('click', () => {
         if (!isReversing) playNext();
       });
 
