@@ -199,6 +199,74 @@
     .stage.loading video {
       opacity: 0;
     }
+
+    .start-screen {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(0, 0, 0, 0.8);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 20;
+      opacity: 0;
+      transition: opacity 0.5s ease;
+    }
+
+    .start-screen.visible {
+      opacity: 1;
+    }
+
+    .start-screen .poster {
+      border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+      margin-bottom: 32px;
+      opacity: 1 !important;
+      /* Принудительно показываем постер на экране запуска */
+      background: #333;
+      /* Fallback фон если изображение не загрузится */
+      min-height: 200px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: white;
+      font-size: 14px;
+    }
+
+    .start-btn {
+      background: transparent;
+      /* Временный яркий фон для отладки */
+      border: 2px solid white;
+      color: white;
+      font-size: 18px;
+      font-weight: 600;
+      padding: 16px 32px;
+      border-radius: 999px;
+      cursor: pointer;
+      transition: all 0.3s ease;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      position: relative;
+      z-index: 21;
+      opacity: 1 !important;
+      visibility: visible !important;
+      display: block !important;
+      min-width: 120px;
+      min-height: 50px;
+    }
+
+    .start-btn:hover {
+      background: #ff85a263;
+      color: white;
+      box-shadow: 0 8px 24px rgba(255, 133, 161, 0.4);
+    }
+
+    .start-btn:active {
+      transform: translateY(0);
+    }
   </style>
 </head>
 
@@ -222,6 +290,12 @@
 
       <!-- Надпись поверх листа (показывается только во время клипа paper) -->
       <div id="overlayText" class="overlayText"></div>
+
+      <!-- Экран запуска -->
+      <div id="startScreen" class="start-screen">
+        <img id="startPoster" class="poster" src="poster.png" alt="Baku poster" />
+        <button id="startBtn" class="start-btn">Начать</button>
+      </div>
     </div>
 
     <div class="controls">
@@ -281,6 +355,8 @@
       const loadingIndicator = document.getElementById('loadingIndicator');
       const progressBar = document.getElementById('progressBar');
       const loadingText = document.getElementById('loadingText');
+      const startScreen = document.getElementById('startScreen');
+      const startBtn = document.getElementById('startBtn');
 
       // Рендер текста для клипа paper
       overlay.textContent = msg;
@@ -775,24 +851,52 @@
           // Убеждаемся что прогресс показывает 100%
           progressBar.style.width = '100%';
           loadingText.textContent = 'Готово!';
+
+          // Показываем экран запуска после небольшой задержки
+          setTimeout(() => {
+            loadingIndicator.style.display = 'none';
+            stage.classList.remove('loading');
+
+            // Проверяем что постер загружен
+            const startPoster = document.getElementById('startPoster');
+            const startBtn = document.getElementById('startBtn');
+            console.log('Start poster loaded:', startPoster.complete, startPoster.naturalWidth, startPoster.naturalHeight);
+            console.log('Start button found:', startBtn, 'visible:', getComputedStyle(startBtn).visibility, 'opacity:', getComputedStyle(startBtn).opacity);
+
+            // Если постер не загружен, ждем его загрузки
+            if (!startPoster.complete) {
+              startPoster.addEventListener('load', () => {
+                console.log('Start poster loaded after wait');
+                startScreen.classList.add('visible');
+              });
+              startPoster.addEventListener('error', () => {
+                console.warn('Start poster failed to load');
+                startScreen.classList.add('visible'); // Показываем экран даже без постера
+              });
+            } else {
+              startScreen.classList.add('visible');
+            }
+          }, 500);
+
         } catch (error) {
           console.warn('Ошибка при загрузке ассетов:', error);
           stopUIAnimation();
         }
       }
 
-      // Функция скрытия индикатора загрузки и запуска приложения
-      function hideLoadingAndStart () {
-        loadingIndicator.style.display = 'none';
-        stage.classList.remove('loading');
+      // Функция запуска приложения
+      function startApplication () {
+        startScreen.classList.remove('visible');
         showPoster(); // Показываем постер после загрузки
         setTimeout(playNext, CONFIG.autoStartDelay);
       }
 
-      // Автовоспроизведение при входе с ожиданием загрузки
+      // Обработчик клика кнопки "Начать"
+      startBtn.addEventListener('click', startApplication);
+
+      // Загрузка ассетов при входе
       (async () => {
         await waitForAssets();
-        hideLoadingAndStart();
       })();
 
     })();
