@@ -599,46 +599,49 @@
 
       // Функция ожидания загрузки всех ассетов с отслеживанием прогресса
       async function waitForAssets () {
-        let totalSize = 0; // Общий размер всех файлов в байтах
-        let loadedSize = 0; // Загруженный размер в байтах
+        let totalAssets = 0; // Общее количество ассетов
         let loadedAssets = 0; // Количество загруженных ассетов
-        let assetSizes = {}; // Размеры каждого ассета
-        let assetLoadedSizes = {}; // Загруженные размеры каждого ассета
         let animationFrameId = null; // ID для requestAnimationFrame
+        let progressAnimationId = null; // ID для анимации прогресса
+        let isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        let startTime = Date.now();
+        let maxLoadTime = 30000; // Максимальное время загрузки 30 секунд
 
-        // Инициализируем размеры ассетов с реалистичными оценками
-        // Постер: ~750KB (из Network tab)
-        assetSizes.poster = 750 * 1024;
-        assetLoadedSizes.poster = 0;
-        totalSize += assetSizes.poster;
+        // Подсчитываем общее количество ассетов
+        totalAssets = 1 + clips.length; // постер + видео
 
-        // Видео: ~1.6MB каждое (из Network tab)
-        clips.forEach(clip => {
-          assetSizes[clip.id] = 1600 * 1024; // 1.6MB
-          assetLoadedSizes[clip.id] = 0;
-          totalSize += assetSizes[clip.id];
+        console.log('Loading assets:', {
+          totalAssets,
+          isIOS,
+          clips: clips.map(c => c.id)
         });
 
-        console.log('Initial sizes:', {
-          totalSize: Math.round(totalSize / 1024) + 'KB',
-          poster: Math.round(assetSizes.poster / 1024) + 'KB',
-          videos: clips.map(c => `${c.id}: ${Math.round(assetSizes[c.id] / 1024)}KB`)
-        });
+        // Функция обновления UI с плавной анимацией
+        function updateUI (forceProgress = null) {
+          let progress;
 
-        // Функция обновления UI (вызывается каждый кадр)
-        function updateUI () {
-          const progress = totalSize > 0 ? (loadedSize / totalSize) * 100 : 0;
+          if (forceProgress !== null) {
+            progress = forceProgress;
+          } else {
+            // Базовый прогресс на основе количества загруженных ассетов
+            const baseProgress = (loadedAssets / totalAssets) * 80; // 80% за загруженные ассеты
+
+            // Дополнительный прогресс на основе времени (для iOS fallback)
+            const timeProgress = Math.min(20, (Date.now() - startTime) / (maxLoadTime * 0.8) * 20);
+
+            progress = Math.min(95, baseProgress + timeProgress);
+          }
 
           progressBar.style.width = `${progress}%`;
           loadingText.textContent = `Загрузка... ${Math.round(progress)}%`;
 
           // Логирование для отладки
           console.log('Progress update:', {
-            totalSize: Math.round(totalSize / 1024) + 'KB',
-            loadedSize: Math.round(loadedSize / 1024) + 'KB',
+            loadedAssets,
+            totalAssets,
             progress: Math.round(progress) + '%',
-            assetSizes,
-            assetLoadedSizes
+            isIOS,
+            timeElapsed: Math.round((Date.now() - startTime) / 1000) + 's'
           });
         }
 
@@ -659,21 +662,29 @@
             cancelAnimationFrame(animationFrameId);
             animationFrameId = null;
           }
+          if (progressAnimationId) {
+            clearInterval(progressAnimationId);
+            progressAnimationId = null;
+          }
         }
 
         // Запускаем анимацию UI
         startUIAnimation();
 
+        // Для iOS добавляем дополнительную анимацию прогресса
+        if (isIOS) {
+          progressAnimationId = setInterval(() => {
+            updateUI();
+          }, 100);
+        }
+
         const assets = [
           // Ждем загрузки постера
           new Promise((resolve) => {
             const onLoad = () => {
-              // Постер загружен полностью
-              assetLoadedSizes.poster = assetSizes.poster;
-              loadedSize += assetSizes.poster;
               loadedAssets++;
-
-              console.log(`Poster loaded: ${Math.round(assetSizes.poster / 1024)}KB`);
+              console.log(`Poster loaded (${loadedAssets}/${totalAssets})`);
+              updateUI();
               resolve();
             };
 
@@ -684,85 +695,46 @@
               poster.addEventListener('error', onLoad, { once: true });
             }
           }),
-          // Ждем ПОЛНОЙ загрузки всех видео
-          ...clips.map((clip, index) =>
+          // Ждем загрузки всех видео (упрощенная логика для iOS)
+          ...clips.map((clip) =>
             new Promise((resolve) => {
               const video = clip.el;
-              let isResolved = false; // Предотвращаем двойное разрешение
-              let videoSize = 0; // Размер видеофайла
+              let isResolved = false;
+              let hasStartedLoading = false;
 
-              // Функция для обновления прогресса видео
-              const updateVideoProgress = () => {
-                if (video.buffered.length > 0 && video.duration > 0) {
-                  const bufferedEnd = video.buffered.end(video.buffered.length - 1);
-                  const progress = (bufferedEnd / video.duration) * 100;
-
-                  // Используем предустановленный размер видео
-                  videoSize = assetSizes[clip.id];
-
-                  // Обновляем загруженный размер
-                  const loadedBytes = (progress / 100) * videoSize;
-                  const previousLoaded = assetLoadedSizes[clip.id];
-                  const newLoaded = loadedBytes - previousLoaded;
-
-                  if (newLoaded > 0) {
-                    assetLoadedSizes[clip.id] = loadedBytes;
-                    loadedSize += newLoaded;
-                  }
-
-                  console.log(`Video ${clip.id} progress:`, {
-                    bufferedEnd,
-                    duration: video.duration,
-                    progress: Math.round(progress),
-                    loadedBytes: Math.round(loadedBytes / 1024) + 'KB',
-                    videoSize: Math.round(videoSize / 1024) + 'KB',
-                    readyState: video.readyState,
-                    totalLoaded: Math.round(loadedSize / 1024) + 'KB',
-                    totalSize: Math.round(totalSize / 1024) + 'KB'
-                  });
-                }
-              };
-
-              // Функция проверки готовности видео
+              // Функция проверки готовности видео (упрощенная для iOS)
               const checkVideoReady = () => {
                 if (isResolved) return;
 
-                // Проверяем что видео готово к воспроизведению до конца
-                const isReady = video.readyState >= 4 && // HAVE_ENOUGH_DATA
-                  video.buffered.length > 0 &&
-                  video.duration > 0 &&
-                  video.buffered.end(video.buffered.length - 1) >= video.duration * 0.95; // 95% загружено
+                let isReady = false;
+
+                if (isIOS) {
+                  // Для iOS используем более мягкие критерии
+                  isReady = video.readyState >= 3 && // HAVE_FUTURE_DATA
+                    video.duration > 0 &&
+                    (video.buffered.length === 0 ||
+                      video.buffered.end(video.buffered.length - 1) >= video.duration * 0.5); // 50% загружено
+                } else {
+                  // Для других браузеров используем строгие критерии
+                  isReady = video.readyState >= 4 && // HAVE_ENOUGH_DATA
+                    video.buffered.length > 0 &&
+                    video.duration > 0 &&
+                    video.buffered.end(video.buffered.length - 1) >= video.duration * 0.9; // 90% загружено
+                }
 
                 console.log(`Video ${clip.id} ready check:`, {
                   readyState: video.readyState,
                   bufferedEnd: video.buffered.length > 0 ? video.buffered.end(video.buffered.length - 1) : 0,
                   duration: video.duration,
                   isReady,
-                  loadedBytes: Math.round(assetLoadedSizes[clip.id] / 1024) + 'KB'
+                  isIOS
                 });
 
                 if (isReady) {
                   isResolved = true;
-
-                  // Убеждаемся что видео помечено как полностью загруженное
-                  const finalLoadedBytes = assetSizes[clip.id];
-                  const previousLoaded = assetLoadedSizes[clip.id];
-                  const remainingBytes = finalLoadedBytes - previousLoaded;
-
-                  if (remainingBytes > 0) {
-                    assetLoadedSizes[clip.id] = finalLoadedBytes;
-                    loadedSize += remainingBytes;
-                  }
-
                   loadedAssets++;
-
-                  // Убираем все слушатели
-                  video.removeEventListener('progress', updateVideoProgress);
-                  video.removeEventListener('loadeddata', updateVideoProgress);
-                  video.removeEventListener('canplaythrough', checkVideoReady);
-                  video.removeEventListener('error', onError);
-
-                  console.log(`Video ${clip.id} completed - fully loaded (${Math.round(finalLoadedBytes / 1024)}KB)`);
+                  console.log(`Video ${clip.id} completed (${loadedAssets}/${totalAssets})`);
+                  updateUI();
                   resolve();
                 }
               };
@@ -770,56 +742,59 @@
               const onError = () => {
                 if (isResolved) return;
                 isResolved = true;
-
-                // Считаем ошибку как завершенную
-                const finalLoadedBytes = assetSizes[clip.id];
-                const previousLoaded = assetLoadedSizes[clip.id];
-                const remainingBytes = finalLoadedBytes - previousLoaded;
-
-                if (remainingBytes > 0) {
-                  assetLoadedSizes[clip.id] = finalLoadedBytes;
-                  loadedSize += remainingBytes;
-                }
-
                 loadedAssets++;
-
-                // Убираем все слушатели
-                video.removeEventListener('progress', updateVideoProgress);
-                video.removeEventListener('loadeddata', updateVideoProgress);
-                video.removeEventListener('canplaythrough', checkVideoReady);
-                video.removeEventListener('error', onError);
-
-                console.log(`Video ${clip.id} error, treating as completed`);
-                resolve(); // Продолжаем даже при ошибке
+                console.log(`Video ${clip.id} error, treating as completed (${loadedAssets}/${totalAssets})`);
+                updateUI();
+                resolve();
               };
 
-              // Отслеживаем прогресс загрузки
-              video.addEventListener('progress', updateVideoProgress);
-              video.addEventListener('loadeddata', updateVideoProgress);
+              const onLoadStart = () => {
+                if (!hasStartedLoading) {
+                  hasStartedLoading = true;
+                  console.log(`Video ${clip.id} started loading`);
+                }
+              };
+
+              const onProgress = () => {
+                if (!isResolved) {
+                  checkVideoReady();
+                }
+              };
+
+              // Добавляем слушатели событий
+              video.addEventListener('loadstart', onLoadStart);
+              video.addEventListener('loadeddata', checkVideoReady);
+              video.addEventListener('canplay', checkVideoReady);
               video.addEventListener('canplaythrough', checkVideoReady);
+              video.addEventListener('progress', onProgress);
               video.addEventListener('error', onError);
 
-              // Проверяем готовность при каждом обновлении прогресса
-              video.addEventListener('progress', checkVideoReady);
-              video.addEventListener('loadeddata', checkVideoReady);
-
-              // Таймаут на случай если видео не загрузится за разумное время
+              // Таймаут для принудительного завершения
               const timeout = setTimeout(() => {
                 if (!isResolved) {
                   console.warn(`Video ${clip.id} timeout, forcing completion`);
-                  checkVideoReady(); // Принудительно завершаем
+                  isResolved = true;
+                  loadedAssets++;
+                  updateUI();
+                  resolve();
                 }
-              }, 30000); // 30 секунд таймаут
+              }, maxLoadTime);
 
               // Очищаем таймаут при завершении
               const originalResolve = resolve;
               resolve = () => {
                 clearTimeout(timeout);
+                video.removeEventListener('loadstart', onLoadStart);
+                video.removeEventListener('loadeddata', checkVideoReady);
+                video.removeEventListener('canplay', checkVideoReady);
+                video.removeEventListener('canplaythrough', checkVideoReady);
+                video.removeEventListener('progress', onProgress);
+                video.removeEventListener('error', onError);
                 originalResolve();
               };
 
               // Если видео уже готово
-              if (video.readyState >= 4) {
+              if (video.readyState >= 3) {
                 checkVideoReady();
               }
             })
@@ -832,24 +807,30 @@
           // Останавливаем анимацию UI
           stopUIAnimation();
 
-          // Дополнительная проверка что все видео действительно готовы
+          // Финальная проверка готовности
           const allVideosReady = clips.every(clip => {
             const video = clip.el;
-            return video.readyState >= 4 &&
-              video.buffered.length > 0 &&
-              video.duration > 0 &&
-              video.buffered.end(video.buffered.length - 1) >= video.duration * 0.9;
+            if (isIOS) {
+              // Для iOS более мягкие критерии
+              return video.readyState >= 3 && video.duration > 0;
+            } else {
+              // Для других браузеров строгие критерии
+              return video.readyState >= 4 &&
+                video.buffered.length > 0 &&
+                video.duration > 0 &&
+                video.buffered.end(video.buffered.length - 1) >= video.duration * 0.8;
+            }
           });
 
           if (allVideosReady) {
             console.log('Все ассеты загружены и готовы к воспроизведению');
-            console.log(`Общий размер: ${Math.round(totalSize / 1024)}KB, Загружено: ${Math.round(loadedSize / 1024)}KB`);
+            console.log(`Загружено ассетов: ${loadedAssets}/${totalAssets}`);
           } else {
-            console.warn('Некоторые видео могут быть не полностью загружены');
+            console.warn('Некоторые видео могут быть не полностью загружены, но продолжаем');
           }
 
-          // Убеждаемся что прогресс показывает 100%
-          progressBar.style.width = '100%';
+          // Плавно доводим прогресс до 100%
+          updateUI(100);
           loadingText.textContent = 'Готово!';
 
           // Показываем экран запуска после небольшой задержки
@@ -881,6 +862,16 @@
         } catch (error) {
           console.warn('Ошибка при загрузке ассетов:', error);
           stopUIAnimation();
+
+          // В случае ошибки все равно показываем интерфейс
+          updateUI(100);
+          loadingText.textContent = 'Готово!';
+
+          setTimeout(() => {
+            loadingIndicator.style.display = 'none';
+            stage.classList.remove('loading');
+            startScreen.classList.add('visible');
+          }, 500);
         }
       }
 
