@@ -12,11 +12,8 @@
   <meta property="og:image" content="poster.jpg" />
   <meta name="theme-color" content="#ffffff" />
 
-  <!-- Preload poster and videos for snappy playback -->
+  <!-- Preload poster for snappy playback -->
   <link rel="preload" as="image" href="poster.jpg" fetchpriority="high" />
-  <link rel="preload" as="video" href="optimized/bouquet_optimized.mp4" type="video/mp4" />
-  <link rel="preload" as="video" href="optimized/paper_optimized.mp4" type="video/mp4" />
-  <link rel="preload" as="video" href="optimized/heart_optimized.mp4" type="video/mp4" />
 
   <style>
     :root {
@@ -237,6 +234,18 @@
     .main-btn:active {
       transform: translateY(0);
     }
+
+    .whishes-text {
+      font-size: 12px;
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      right: 10px;
+      text-align: center;
+      color: white;
+      opacity: 0.8;
+      z-index: 21;
+    }
   </style>
 </head>
 
@@ -261,6 +270,11 @@
 
       <div id="againScreen" class="start-screen" style="display: none;">
         <button id="nextBtn" class="main-btn">Следующее</button>
+      </div>
+
+      <div id="whishesText" class="whishes-text">
+        Пусть этот букет будет твоим самым любимым, пусть этот лист будет твоим самым любимым, пусть этот сердечко
+        будет твоим самым любимым.
       </div>
     </div>
   </div>
@@ -397,6 +411,10 @@
       };
 
       function pickNext () {
+        // TODO: Убрать это после тестирования
+        // Временно показываем только paper видео
+        return clips.find(c => c.id === 'paper');
+
         // исключаем повтор предыдущего
         const pool = clips.filter(c => c.id !== lastId);
         return pool[Math.floor(Math.random() * pool.length)];

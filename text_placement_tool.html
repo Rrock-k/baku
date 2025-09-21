@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Инструмент размещения текста на листе</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      background: #f0f0f0;
+    }
+
+    .container {
+      display: flex;
+      gap: 20px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .image-container {
+      position: relative;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .image-wrapper {
+      position: relative;
+      display: inline-block;
+    }
+
+    #paperImage {
+      max-width: 400px;
+      height: auto;
+      display: block;
+    }
+
+    .text-overlay {
+      position: absolute;
+      background: rgba(255, 255, 255, 0.8);
+      border: 2px dashed #ff6b9d;
+      border-radius: 4px;
+      padding: 10px;
+      font-size: 14px;
+      line-height: 1.4;
+      color: #333;
+      min-width: 200px;
+      cursor: move;
+      user-select: none;
+    }
+
+    .controls {
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+      width: 300px;
+    }
+
+    .control-group {
+      margin-bottom: 15px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+
+    input,
+    textarea,
+    select {
+      width: 100%;
+      padding: 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 14px;
+    }
+
+    textarea {
+      height: 100px;
+      resize: vertical;
+    }
+
+    .coordinates {
+      background: #f8f9fa;
+      padding: 10px;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 12px;
+    }
+
+    .preset-buttons {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+
+    button {
+      padding: 8px 16px;
+      background: #ff6b9d;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 12px;
+    }
+
+    button:hover {
+      background: #ff5582;
+    }
+
+    .export-code {
+      background: #f8f9fa;
+      padding: 15px;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 12px;
+      white-space: pre-wrap;
+      margin-top: 15px;
+    }
+  </style>
+</head>
+
+<body>
+  <h1>Инструмент размещения текста на листе Baku</h1>
+
+  <div class="container">
+    <div class="image-container">
+      <div class="image-wrapper">
+        <img id="paperImage" src="paper_last_frame.jpg" alt="Paper last frame">
+        <div id="textOverlay" class="text-overlay" style="top: 200px; left: 100px;">
+          С днем рождения!<br>
+          Желаю счастья, здоровья<br>
+          и радости каждый день!
+        </div>
+      </div>
+    </div>
+
+    <div class="controls">
+      <div class="control-group">
+        <label>Текст поздравления:</label>
+        <textarea id="textInput" placeholder="Введите текст поздравления...">С днем рождения!
+Желаю счастья, здоровья
+и радости каждый день!</textarea>
+      </div>
+
+      <div class="control-group">
+        <label>Размер шрифта:</label>
+        <input type="range" id="fontSize" min="10" max="24" value="14">
+        <span id="fontSizeValue">14px</span>
+      </div>
+
+      <div class="control-group">
+        <label>Выравнивание:</label>
+        <select id="textAlign">
+          <option value="left">По левому краю</option>
+          <option value="center" selected>По центру</option>
+          <option value="right">По правому краю</option>
+        </select>
+      </div>
+
+      <div class="control-group">
+        <label>Цвет текста:</label>
+        <input type="color" id="textColor" value="#333333">
+      </div>
+
+      <div class="control-group">
+        <label>Поворот текста:</label>
+        <input type="range" id="textRotation" min="-45" max="45" value="0">
+        <span id="textRotationValue">0°</span>
+      </div>
+
+      <div class="preset-buttons">
+        <button onclick="setPreset('top')">Верх</button>
+        <button onclick="setPreset('center')">Центр</button>
+        <button onclick="setPreset('bottom')">Низ</button>
+        <button onclick="resetPosition()">Сброс</button>
+      </div>
+
+      <div class="control-group">
+        <label>Координаты (относительно изображения 768x1152):</label>
+        <div class="coordinates">
+          <div>X: <span id="coordX">100</span>px</div>
+          <div>Y: <span id="coordY">200</span>px</div>
+          <div>Ширина: <span id="coordWidth">200</span>px</div>
+          <div>Высота: <span id="coordHeight">60</span>px</div>
+        </div>
+      </div>
+
+      <div class="export-code" id="exportCode">
+        // Координаты для размещения текста
+        const textArea = {
+        x: 100,
+        y: 200,
+        width: 200,
+        height: 60
+        };
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const textOverlay = document.getElementById('textOverlay');
+    const textInput = document.getElementById('textInput');
+    const fontSize = document.getElementById('fontSize');
+    const fontSizeValue = document.getElementById('fontSizeValue');
+    const textAlign = document.getElementById('textAlign');
+    const textColor = document.getElementById('textColor');
+    const textRotation = document.getElementById('textRotation');
+    const textRotationValue = document.getElementById('textRotationValue');
+    const coordX = document.getElementById('coordX');
+    const coordY = document.getElementById('coordY');
+    const coordWidth = document.getElementById('coordWidth');
+    const coordHeight = document.getElementById('coordHeight');
+    const exportCode = document.getElementById('exportCode');
+
+    // Исходные размеры изображения
+    const imageWidth = 768;
+    const imageHeight = 1152;
+
+    let isDragging = false;
+    let dragOffset = { x: 0, y: 0 };
+
+    // Обновление текста
+    textInput.addEventListener('input', updateText);
+    fontSize.addEventListener('input', updateFontSize);
+    textAlign.addEventListener('change', updateTextAlign);
+    textColor.addEventListener('change', updateTextColor);
+    textRotation.addEventListener('input', updateTextRotation);
+
+    function updateText () {
+      textOverlay.innerHTML = textInput.value.replace(/\n/g, '<br>');
+      updateCoordinates();
+    }
+
+    function updateFontSize () {
+      const size = fontSize.value;
+      fontSizeValue.textContent = size + 'px';
+      textOverlay.style.fontSize = size + 'px';
+      updateCoordinates();
+    }
+
+    function updateTextAlign () {
+      textOverlay.style.textAlign = textAlign.value;
+    }
+
+    function updateTextColor () {
+      textOverlay.style.color = textColor.value;
+    }
+
+    function updateTextRotation () {
+      const rotation = textRotation.value;
+      textRotationValue.textContent = rotation + '°';
+      textOverlay.style.transform = `rotate(${rotation}deg)`;
+    }
+
+    function updateCoordinates () {
+      const rect = textOverlay.getBoundingClientRect();
+      const imageRect = document.getElementById('paperImage').getBoundingClientRect();
+
+      // Вычисляем координаты относительно изображения
+      const scaleX = imageWidth / imageRect.width;
+      const scaleY = imageHeight / imageRect.height;
+
+      const x = Math.round((rect.left - imageRect.left) * scaleX);
+      const y = Math.round((rect.top - imageRect.top) * scaleY);
+      const width = Math.round(rect.width * scaleX);
+      const height = Math.round(rect.height * scaleY);
+
+      coordX.textContent = x;
+      coordY.textContent = y;
+      coordWidth.textContent = width;
+      coordHeight.textContent = height;
+
+      updateExportCode(x, y, width, height);
+    }
+
+    function updateExportCode (x, y, width, height) {
+      const rotation = textRotation.value;
+      exportCode.textContent = `// Координаты для размещения текста
+const textArea = {
+    x: ${x},
+    y: ${y},
+    width: ${width},
+    height: ${height},
+    rotation: ${rotation}deg
+};
+
+// Процентные координаты (для адаптивности)
+const textAreaPercent = {
+    x: ${Math.round((x / imageWidth) * 100)}%,
+    y: ${Math.round((y / imageHeight) * 100)}%,
+    width: ${Math.round((width / imageWidth) * 100)}%,
+    height: ${Math.round((height / imageHeight) * 100)}%,
+    rotation: ${rotation}deg
+};
+
+// CSS стили для применения
+const textStyles = {
+    position: 'absolute',
+    left: '${x}px',
+    top: '${y}px',
+    width: '${width}px',
+    height: '${height}px',
+    transform: 'rotate(${rotation}deg)',
+    fontSize: '${fontSize.value}px',
+    textAlign: '${textAlign.value}',
+    color: '${textColor.value}'
+};`;
+    }
+
+    // Предустановленные позиции
+    function setPreset (position) {
+      const imageRect = document.getElementById('paperImage').getBoundingClientRect();
+      const scaleX = imageWidth / imageRect.width;
+      const scaleY = imageHeight / imageRect.height;
+
+      let x, y;
+      const width = 300;
+      const height = 80;
+
+      switch (position) {
+        case 'top':
+          x = (imageWidth - width) / 2;
+          y = 150;
+          break;
+        case 'center':
+          x = (imageWidth - width) / 2;
+          y = (imageHeight - height) / 2;
+          break;
+        case 'bottom':
+          x = (imageWidth - width) / 2;
+          y = imageHeight - height - 150;
+          break;
+      }
+
+      textOverlay.style.left = (x / scaleX) + 'px';
+      textOverlay.style.top = (y / scaleY) + 'px';
+      textOverlay.style.width = (width / scaleX) + 'px';
+      textOverlay.style.height = (height / scaleY) + 'px';
+
+      updateCoordinates();
+    }
+
+    function resetPosition () {
+      textOverlay.style.left = '100px';
+      textOverlay.style.top = '200px';
+      textOverlay.style.width = '200px';
+      textOverlay.style.height = '60px';
+      updateCoordinates();
+    }
+
+    // Перетаскивание
+    textOverlay.addEventListener('mousedown', startDrag);
+    document.addEventListener('mousemove', drag);
+    document.addEventListener('mouseup', endDrag);
+
+    function startDrag (e) {
+      isDragging = true;
+      const rect = textOverlay.getBoundingClientRect();
+      dragOffset.x = e.clientX - rect.left;
+      dragOffset.y = e.clientY - rect.top;
+      textOverlay.style.cursor = 'grabbing';
+    }
+
+    function drag (e) {
+      if (!isDragging) return;
+
+      const imageRect = document.getElementById('paperImage').getBoundingClientRect();
+      const newX = e.clientX - imageRect.left - dragOffset.x;
+      const newY = e.clientY - imageRect.top - dragOffset.y;
+
+      textOverlay.style.left = Math.max(0, Math.min(newX, imageRect.width - textOverlay.offsetWidth)) + 'px';
+      textOverlay.style.top = Math.max(0, Math.min(newY, imageRect.height - textOverlay.offsetHeight)) + 'px';
+
+      updateCoordinates();
+    }
+
+    function endDrag () {
+      isDragging = false;
+      textOverlay.style.cursor = 'move';
+    }
+
+    // Инициализация
+    updateText();
+    updateFontSize();
+    updateTextAlign();
+    updateTextColor();
+    updateTextRotation();
+  </script>
+</body>
+
+</html>
