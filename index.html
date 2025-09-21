@@ -301,7 +301,6 @@
     </div>
 
     <div class="controls">
-      <button id="rewindBtn">На начало</button>
       <button id="againBtn">Ещё раз</button>
     </div>
   </div>
@@ -410,7 +409,6 @@
 
       const poster = document.getElementById('poster');
       const overlay = document.getElementById('overlayText');
-      const rewindBtn = document.getElementById('rewindBtn');
       const againBtn = document.getElementById('againBtn');
       const stage = document.getElementById('stage');
       const loadingIndicator = document.getElementById('loadingIndicator');
@@ -478,51 +476,13 @@
 
       function onEnded () {
         hideOverlay();
-        rewindBtn.disabled = false;
         againBtn.disabled = false;
       }
 
-      function rewindToStart () {
-        if (isReversing) return;
-
-        rewindBtn.disabled = true;
-        againBtn.disabled = true;
-
-        if (current && current.el.currentTime > 0) {
-          if (reverseInterval) {
-            clearInterval(reverseInterval);
-            reverseInterval = null;
-          }
-
-          isReversing = true;
-          const video = current.el;
-
-          reverseInterval = setInterval(() => {
-            const newTime = video.currentTime - (CONFIG.rewindInterval / 1000) * CONFIG.rewindSpeed;
-
-            if (newTime <= 0) {
-              clearInterval(reverseInterval);
-              reverseInterval = null;
-              video.currentTime = 0;
-              video.pause();
-              current = null;
-              isReversing = false;
-              rewindBtn.disabled = false;
-              againBtn.disabled = false;
-            } else {
-              video.currentTime = newTime;
-            }
-          }, CONFIG.rewindInterval);
-        } else {
-          rewindBtn.disabled = false;
-          againBtn.disabled = false;
-        }
-      }
 
       function playNext () {
         if (isReversing) return;
 
-        rewindBtn.disabled = true;
         againBtn.disabled = true;
 
         if (current && current.el.currentTime > 0) {
@@ -570,7 +530,6 @@
           console.error('Ошибка воспроизведения:', e);
           showPoster();
           videoToPlay.style.opacity = '0';
-          rewindBtn.disabled = false;
           againBtn.disabled = false;
         });
 
@@ -584,10 +543,6 @@
           });
         }, 200);
       }
-
-      rewindBtn.addEventListener('click', () => {
-        if (!rewindBtn.disabled && !isReversing) rewindToStart();
-      });
 
       againBtn.addEventListener('click', () => {
         if (!againBtn.disabled && !isReversing) playNext();
