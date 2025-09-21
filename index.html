@@ -176,7 +176,8 @@
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
+      justify-content: end;
+      padding-bottom: 17%;
       z-index: 20;
       opacity: 0;
       transition: opacity 0.5s ease;
@@ -206,7 +207,7 @@
     .main-btn {
       background: transparent;
       /* Временный яркий фон для отладки */
-      border: 2px solid white;
+      border: 1.5px solid white;
       color: white;
       font-size: 14px;
       font-weight: 600;
@@ -236,15 +237,28 @@
     }
 
     .whishes-text {
-      font-size: 12px;
+      font-size: 14px;
+      font-weight: 600;
       position: absolute;
-      bottom: 10px;
-      left: 10px;
-      right: 10px;
-      text-align: center;
-      color: white;
-      opacity: 0.8;
+      left: 21%;
+      top: 41%;
+      width: 59%;
+      height: 23%;
+      text-align: left;
+      color: #222222;
+      opacity: 0;
       z-index: 21;
+      transform: rotate(0.8deg);
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      box-sizing: border-box;
+      pointer-events: none;
+      transition: opacity 1s ease, transform 1s ease;
+    }
+
+    .whishes-text.show {
+      opacity: 0.9;
     }
   </style>
 </head>
@@ -273,8 +287,9 @@
       </div>
 
       <div id="whishesText" class="whishes-text">
-        Пусть этот букет будет твоим самым любимым, пусть этот лист будет твоим самым любимым, пусть этот сердечко
-        будет твоим самым любимым.
+        С днем рождения!<br>
+        Желаю счастья, здоровья<br>
+        и радости каждый день!
       </div>
     </div>
   </div>
@@ -291,6 +306,15 @@
         { id: 'bouquet', el: null, src: 'optimized/bouquet_optimized.mp4', weight: 1 },
         { id: 'paper', el: null, src: 'optimized/paper_optimized.mp4', weight: 1 },
         { id: 'heart', el: null, src: 'optimized/heart_optimized.mp4', weight: 1 }
+      ];
+
+      // Массив поздравлений для динамической смены
+      const wishes = [
+        "С днем рождения! Желаю счастья, здоровья и радости каждый день!",
+        "Поздравляю! Пусть исполнятся все мечты и сбудутся желания!",
+        "С праздником! Желаю удачи во всем и много улыбок!",
+        "С днем рождения! Пусть каждый день приносит только радость и счастье!",
+        "Поздравляю! Желаю крепкого здоровья и исполнения всех желаний!"
       ];
 
 
@@ -389,7 +413,13 @@
       const startScreen = document.getElementById('startScreen');
       const startBtn = document.getElementById('startBtn');
       const againScreen = document.getElementById('againScreen');
+      const whishesText = document.getElementById('whishesText');
 
+      // Функция для смены поздравлений
+      function updateWishes () {
+        const randomWish = wishes[Math.floor(Math.random() * wishes.length)];
+        whishesText.innerHTML = randomWish;
+      }
 
       let lastId = null;
       let current = null;
@@ -441,9 +471,16 @@
           c.el.currentTime = 0;
           c.el.style.opacity = '0';
         }
+        // Скрываем wishes-text при остановке
+        whishesText.classList.remove('show');
       }
 
       function onEnded () {
+        // Показываем wishes-text только для видео "paper"
+        if (current && current.id === 'paper') {
+          whishesText.classList.add('show');
+        }
+
         againScreen.style.display = 'flex';
         againScreen.classList.add('visible');
       }
@@ -455,6 +492,9 @@
         // Скрываем кнопку "Ещё раз" при начале воспроизведения
         againScreen.style.display = 'none';
         againScreen.classList.remove('visible');
+
+        // Скрываем wishes-text при начале нового видео
+        whishesText.classList.remove('show');
 
         if (current && current.el.currentTime > 0) {
           if (reverseInterval) {
@@ -488,6 +528,9 @@
         lastId = next.id;
         current = next;
         const videoToPlay = next.el;
+
+        // Обновляем поздравление при каждом воспроизведении
+        updateWishes();
 
         videoToPlay.playbackRate = CONFIG.videoPlaybackRate;
         videoToPlay.currentTime = 0;
