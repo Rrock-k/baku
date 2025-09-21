@@ -207,7 +207,6 @@
       left: 0;
       right: 0;
       bottom: 0;
-      background: rgba(0, 0, 0, 0.8);
       display: flex;
       flex-direction: column;
       align-items: center;
@@ -298,10 +297,11 @@
         <img id="startPoster" class="poster" src="poster.jpg" alt="Baku poster" />
         <button id="startBtn" class="start-btn">Начать</button>
       </div>
-    </div>
 
-    <div class="controls">
-      <button id="againBtn">Ещё раз</button>
+      <!-- Кнопка "Ещё раз" в центре экрана -->
+      <div id="againScreen" class="start-screen" style="display: none;">
+        <button id="againBtn" class="start-btn">Ещё раз</button>
+      </div>
     </div>
   </div>
 
@@ -417,6 +417,7 @@
       const loadingDetails = document.getElementById('loadingDetails');
       const startScreen = document.getElementById('startScreen');
       const startBtn = document.getElementById('startBtn');
+      const againScreen = document.getElementById('againScreen');
 
       // Рендер текста для клипа paper
       overlay.textContent = msg;
@@ -476,14 +477,17 @@
 
       function onEnded () {
         hideOverlay();
-        againBtn.disabled = false;
+        againScreen.style.display = 'flex';
+        againScreen.classList.add('visible');
       }
 
 
       function playNext () {
         if (isReversing) return;
 
-        againBtn.disabled = true;
+        // Скрываем кнопку "Ещё раз" при начале воспроизведения
+        againScreen.style.display = 'none';
+        againScreen.classList.remove('visible');
 
         if (current && current.el.currentTime > 0) {
           if (reverseInterval) {
@@ -530,7 +534,8 @@
           console.error('Ошибка воспроизведения:', e);
           showPoster();
           videoToPlay.style.opacity = '0';
-          againBtn.disabled = false;
+          againScreen.style.display = 'flex';
+          againScreen.classList.add('visible');
         });
 
         setTimeout(() => {
@@ -545,7 +550,7 @@
       }
 
       againBtn.addEventListener('click', () => {
-        if (!againBtn.disabled && !isReversing) playNext();
+        if (!isReversing) playNext();
       });
 
       async function waitForAssets () {
