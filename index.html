@@ -267,74 +267,6 @@
     .start-btn:active {
       transform: translateY(0);
     }
-
-    /* Система тостов для ошибок */
-    .toast-container {
-      position: fixed;
-      top: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      z-index: 1000;
-      pointer-events: none;
-    }
-
-    .toast {
-      background: rgba(220, 38, 38, 0.95);
-      color: white;
-      padding: 12px 20px;
-      border-radius: 8px;
-      font-size: 14px;
-      font-weight: 500;
-      margin-bottom: 8px;
-      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-      backdrop-filter: blur(10px);
-      border: 1px solid rgba(255, 255, 255, 0.1);
-      opacity: 0;
-      transform: translateY(-20px);
-      transition: all 0.3s ease;
-      pointer-events: auto;
-      max-width: 90vw;
-      text-align: center;
-      word-wrap: break-word;
-    }
-
-    .toast.show {
-      opacity: 1;
-      transform: translateY(0);
-    }
-
-    .toast.hide {
-      opacity: 0;
-      transform: translateY(-20px);
-    }
-
-    .toast.warning {
-      background: rgba(245, 158, 11, 0.95);
-    }
-
-    .toast.info {
-      background: rgba(59, 130, 246, 0.95);
-    }
-
-    .toast.success {
-      background: rgba(34, 197, 94, 0.95);
-    }
-
-    .toast-close {
-      background: none;
-      border: none;
-      color: white;
-      font-size: 18px;
-      cursor: pointer;
-      margin-left: 12px;
-      padding: 0;
-      opacity: 0.7;
-      transition: opacity 0.2s ease;
-    }
-
-    .toast-close:hover {
-      opacity: 1;
-    }
   </style>
 </head>
 
@@ -370,11 +302,8 @@
       <button id="rewindBtn">На начало</button>
       <button id="againBtn">Ещё раз</button>
     </div>
-    <div class="hint" id="hint">Автовоспроизведение без звука поддерживается на большинстве устройств</div>
   </div>
 
-  <!-- Контейнер для тостов -->
-  <div id="toastContainer" class="toast-container"></div>
 
   <script>
     (function () {
@@ -382,34 +311,54 @@
       const msg = qs.get('msg') || '';
 
       // Устанавливаем русские тексты напрямую
-      document.getElementById('rewindBtn').textContent = 'На начало';
-      document.getElementById('againBtn').textContent = 'Ещё раз';
-      document.getElementById('hint').textContent = 'Автовоспроизведение без звука поддерживается на большинстве устройств';
 
-      // Map клипов
+      // Map клипов (элементы будут созданы динамически)
       const clips = [
-        { id: 'bouquet', el: document.getElementById('v-bouquet'), src: 'bouquet.mp4', weight: 1 },
-        { id: 'paper', el: document.getElementById('v-paper'), src: 'paper.mp4', weight: 1 },
-        { id: 'heart', el: document.getElementById('v-heart'), src: 'heart.mp4', weight: 1 }
+        { id: 'bouquet', el: null, src: 'bouquet.mp4', weight: 1 },
+        { id: 'paper', el: null, src: 'paper.mp4', weight: 1 },
+        { id: 'heart', el: null, src: 'heart.mp4', weight: 1 }
       ];
 
 
-      // Инициализация источников видео
-      for (const c of clips) {
-        const source = document.createElement('source');
-        source.src = c.src;
-        c.el.appendChild(source);
-        c.el.muted = true;
-        c.el.playsInline = true;
-        c.el.setAttribute('playsinline', '');
-        c.el.setAttribute('webkit-playsinline', ''); // Дополнительная поддержка для старых браузеров
-        c.el.preload = 'auto'; // Предзагрузка видео
-        // Обработчик ended будет добавляться динамически в playNext()
-        c.el.addEventListener('error', (e) => {
-          console.warn('Video error', c.id, e);
-          ErrorHandler.handleCriticalError(e, `Видео ${c.id}`);
+      // Система предзагрузки видео
+      async function preloadVideos (urls) {
+        const blobs = await Promise.all(
+          urls.map(async (url) => {
+            const res = await fetch(url);
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            return { url, blob: await res.blob() };
+          })
+        );
+
+        const items = blobs.map(({ url, blob }) => {
+          const objectUrl = URL.createObjectURL(blob);
+          const el = document.createElement("video");
+          el.src = objectUrl;
+          el.muted = true;
+          el.playsInline = true;
+          el.style.position = 'absolute';
+          el.style.inset = '0';
+          el.style.width = '100%';
+          el.style.height = '100%';
+          el.style.objectFit = 'cover';
+          el.style.opacity = '0';
+          el.style.transition = 'opacity 200ms linear';
+
+          document.getElementById('stage').appendChild(el);
+          return { url, objectUrl, element: el };
         });
+
+        await Promise.all(items.map(({ element }) =>
+          new Promise(resolve => {
+            element.addEventListener("canplaythrough", resolve, { once: true });
+            element.addEventListener("loadedmetadata", resolve, { once: true });
+            element.load();
+          })
+        ));
+
+        return { items };
       }
+
 
       const poster = document.getElementById('poster');
       const overlay = document.getElementById('overlayText');
@@ -421,7 +370,6 @@
       const loadingText = document.getElementById('loadingText');
       const startScreen = document.getElementById('startScreen');
       const startBtn = document.getElementById('startBtn');
-      const toastContainer = document.getElementById('toastContainer');
 
       // Рендер текста для клипа paper
       overlay.textContent = msg;
@@ -432,122 +380,19 @@
       let reverseInterval = null; // Отслеживание активного интервала обратного воспроизведения
       let isReversing = false; // Флаг для предотвращения повторных вызовов
 
-      // ===== СИСТЕМА ОБРАБОТКИ ОШИБОК =====
-      const ErrorHandler = {
-        // Типы ошибок
-        TYPES: {
-          CRITICAL: 'critical',
-          WARNING: 'warning',
-          INFO: 'info',
-          SUCCESS: 'success'
-        },
+      // Простая обработка ошибок
+      function showError (message) {
+        console.error(message);
+      }
 
-        // Показ тоста
-        showToast (message, type = 'critical', duration = 5000) {
-          const toast = document.createElement('div');
-          toast.className = `toast ${type}`;
-
-          const closeBtn = document.createElement('button');
-          closeBtn.className = 'toast-close';
-          closeBtn.innerHTML = '×';
-          closeBtn.onclick = () => this.hideToast(toast);
-
-          toast.innerHTML = message;
-          toast.appendChild(closeBtn);
-
-          toastContainer.appendChild(toast);
-
-          // Анимация появления
-          setTimeout(() => toast.classList.add('show'), 10);
-
-          // Автоматическое скрытие
-          if (duration > 0) {
-            setTimeout(() => this.hideToast(toast), duration);
-          }
-
-          return toast;
-        },
-
-        // Скрытие тоста
-        hideToast (toast) {
-          toast.classList.remove('show');
-          toast.classList.add('hide');
-          setTimeout(() => {
-            if (toast.parentNode) {
-              toast.parentNode.removeChild(toast);
-            }
-          }, 300);
-        },
-
-        // Обработка критических ошибок
-        handleCriticalError (error, context = '') {
-          console.error('КРИТИЧЕСКАЯ ОШИБКА:', error, context);
-
-          let message = 'Произошла критическая ошибка';
-
-          if (error.name === 'NotAllowedError') {
-            message = 'Воспроизведение заблокировано браузером. Попробуйте нажать "Ещё раз"';
-          } else if (error.name === 'NotSupportedError') {
-            message = 'Формат видео не поддерживается';
-          } else if (error.message) {
-            message = `Ошибка: ${error.message}`;
-          }
-
-          if (context) {
-            message += ` (${context})`;
-          }
-
-          this.showToast(message, this.TYPES.CRITICAL, 8000);
-        },
-
-        // Обработка предупреждений
-        handleWarning (message, context = '') {
-          console.warn('ПРЕДУПРЕЖДЕНИЕ:', message, context);
-          this.showToast(`⚠️ ${message}`, this.TYPES.WARNING, 4000);
-        },
-
-        // Обработка информационных сообщений
-        handleInfo (message, context = '') {
-          console.info('ИНФО:', message, context);
-          this.showToast(`ℹ️ ${message}`, this.TYPES.INFO, 3000);
-        },
-
-        // Обработка успешных операций
-        handleSuccess (message, context = '') {
-          console.log('УСПЕХ:', message, context);
-          this.showToast(`✅ ${message}`, this.TYPES.SUCCESS, 2000);
-        }
-      };
-
-      // Глобальный обработчик необработанных ошибок
-      window.addEventListener('error', (event) => {
-        ErrorHandler.handleCriticalError(event.error || new Error(event.message), 'Глобальная ошибка');
-      });
-
-      // Обработчик необработанных промисов
-      window.addEventListener('unhandledrejection', (event) => {
-        ErrorHandler.handleCriticalError(new Error(event.reason), 'Необработанный промис');
-      });
-      // =====================================
-
-      // ===== НАСТРОЙКИ =====
+      // Настройки
       const CONFIG = {
-        // Скорость воспроизведения видео
         videoPlaybackRate: 1.3,
-
-        // Настройки обратной перемотки
-        rewindSpeed: 5.0,        // Скорость обратной перемотки (было 2.0)
-        rewindInterval: 30,      // Частота обновления в мс (было 50)
-
-        // Настройки анимаций
-        fadeInDuration: 200,     // Длительность появления в мс
-        fadeOutDuration: 200,    // Длительность исчезновения в мс
-
-        // Задержки
-        hideOldVideosDelay: 200, // Задержка скрытия старых видео в мс
-        autoStartDelay: 100,     // Задержка автозапуска в мс
+        rewindSpeed: 5.0,
+        rewindInterval: 30,
+        fadeDuration: 200,
+        autoStartDelay: 100
       };
-      // =====================
 
       function pickNext () {
         // исключаем повтор предыдущего
@@ -555,462 +400,195 @@
         return pool[Math.floor(Math.random() * pool.length)];
       }
 
-      async function fadeIn (el) {
-        el.style.transition = `opacity ${CONFIG.fadeInDuration}ms linear`;
+      function fadeIn (el) {
+        el.style.transition = `opacity ${CONFIG.fadeDuration}ms linear`;
         el.style.opacity = '1';
-        return new Promise(resolve => setTimeout(resolve, CONFIG.fadeInDuration));
       }
-      async function fadeOut (el) {
-        el.style.transition = `opacity ${CONFIG.fadeOutDuration}ms linear`;
+      function fadeOut (el) {
+        el.style.transition = `opacity ${CONFIG.fadeDuration}ms linear`;
         el.style.opacity = '0';
-        return new Promise(resolve => setTimeout(resolve, CONFIG.fadeOutDuration));
       }
 
       function showPoster () { poster.style.opacity = '1'; }
       function hidePoster () { poster.style.opacity = '0'; }
-
-      function showOverlayFor (id) {
-        if (id === 'paper' && msg) { overlay.style.opacity = '1'; }
-      }
+      function showOverlay () { if (msg) overlay.style.opacity = '1'; }
       function hideOverlay () { overlay.style.opacity = '0'; }
 
       function stopAll () {
-        // Очищаем интервал обратного воспроизведения если он активен
         if (reverseInterval) {
           clearInterval(reverseInterval);
           reverseInterval = null;
         }
         isReversing = false;
-
-        for (const c of clips) { c.el.pause(); c.el.currentTime = 0; c.el.style.opacity = '0'; }
+        for (const c of clips) {
+          c.el.pause();
+          c.el.currentTime = 0;
+          c.el.style.opacity = '0';
+        }
       }
 
       function onEnded () {
-        // Застываем на последнем кадре и включаем кнопки
         hideOverlay();
-        rewindBtn.disabled = false; // Разблокируем кнопку перемотки
-        againBtn.disabled = false;  // Разблокируем кнопку "Ещё раз"
+        rewindBtn.disabled = false;
+        againBtn.disabled = false;
       }
 
-      async function rewindToStart () {
-        // Предотвращаем повторные вызовы во время обратного воспроизведения
-        if (isReversing) {
-          return;
-        }
+      function rewindToStart () {
+        if (isReversing) return;
 
-        // Блокируем кнопки сразу при клике
         rewindBtn.disabled = true;
         againBtn.disabled = true;
 
         if (current && current.el.currentTime > 0) {
-          // Очищаем предыдущий интервал если он существует
           if (reverseInterval) {
             clearInterval(reverseInterval);
             reverseInterval = null;
           }
 
           isReversing = true;
+          const video = current.el;
 
-          // Проигрываем текущее видео назад до начала
-          await new Promise(resolve => {
-            const video = current.el;
-            const reverseSpeed = CONFIG.rewindSpeed;
-            const interval = CONFIG.rewindInterval;
+          reverseInterval = setInterval(() => {
+            const newTime = video.currentTime - (CONFIG.rewindInterval / 1000) * CONFIG.rewindSpeed;
 
-            reverseInterval = setInterval(() => {
-              const newTime = video.currentTime - (interval / 1000) * reverseSpeed;
-
-              if (newTime <= 0) {
-                clearInterval(reverseInterval);
-                reverseInterval = null;
-                video.currentTime = 0;
-                video.pause();
-
-                // НЕ скрываем видео - оставляем первый кадр видимым
-                current = null;
-                isReversing = false;
-                rewindBtn.disabled = false; // Разблокируем кнопку перемотки
-                againBtn.disabled = false;  // Разблокируем кнопку "Ещё раз"
-                resolve();
-              } else {
-                video.currentTime = newTime;
-              }
-            }, interval);
-          });
+            if (newTime <= 0) {
+              clearInterval(reverseInterval);
+              reverseInterval = null;
+              video.currentTime = 0;
+              video.pause();
+              current = null;
+              isReversing = false;
+              rewindBtn.disabled = false;
+              againBtn.disabled = false;
+            } else {
+              video.currentTime = newTime;
+            }
+          }, CONFIG.rewindInterval);
         } else {
-          // Если видео уже в начале или нет текущего видео
           rewindBtn.disabled = false;
           againBtn.disabled = false;
         }
       }
 
-      async function playNext () {
-        // Предотвращаем повторные вызовы во время обратного воспроизведения
-        if (isReversing) {
-          return;
-        }
+      function playNext () {
+        if (isReversing) return;
 
-        // Блокируем кнопки сразу при клике
         rewindBtn.disabled = true;
         againBtn.disabled = true;
 
         if (current && current.el.currentTime > 0) {
-          // Очищаем предыдущий интервал если он существует
           if (reverseInterval) {
             clearInterval(reverseInterval);
             reverseInterval = null;
           }
 
           isReversing = true;
+          const video = current.el;
 
-          // Если есть текущее видео и оно не в начале, проигрываем его назад
-          await new Promise(resolve => {
-            const video = current.el;
-            const reverseSpeed = CONFIG.rewindSpeed;
-            const interval = CONFIG.rewindInterval;
+          reverseInterval = setInterval(() => {
+            const newTime = video.currentTime - (CONFIG.rewindInterval / 1000) * CONFIG.rewindSpeed;
 
-            reverseInterval = setInterval(() => {
-              const newTime = video.currentTime - (interval / 1000) * reverseSpeed;
-
-              if (newTime <= 0) {
-                clearInterval(reverseInterval);
-                reverseInterval = null;
-                video.currentTime = 0;
-                video.pause();
-
-                // НЕ скрываем видео - оставляем видимым до показа нового
-                current = null;
-                isReversing = false;
-                resolve();
-              } else {
-                video.currentTime = newTime;
-              }
-            }, interval);
-          });
+            if (newTime <= 0) {
+              clearInterval(reverseInterval);
+              reverseInterval = null;
+              video.currentTime = 0;
+              video.pause();
+              current = null;
+              isReversing = false;
+              playNext();
+              return;
+            } else {
+              video.currentTime = newTime;
+            }
+          }, CONFIG.rewindInterval);
+          return;
         }
 
         const next = pickNext();
         lastId = next.id;
         current = next;
-
         const videoToPlay = next.el;
+
         videoToPlay.playbackRate = CONFIG.videoPlaybackRate;
         videoToPlay.currentTime = 0;
+        videoToPlay.addEventListener('ended', onEnded, { once: true });
 
-        // Добавляем обработчик ended с автоматическим удалением
-        const onPlayEnd = () => {
-          onEnded();
-        };
-        videoToPlay.addEventListener('ended', onPlayEnd, { once: true });
-
-        // Убираем постер для плавного перехода между видео
         hidePoster();
+        videoToPlay.style.opacity = '1';
+        if (next.id === 'paper') showOverlay();
 
-        try {
-          // Показываем видео
-          videoToPlay.style.opacity = '1';
-          showOverlayFor(next.id);
-
-          // Ждем готовности видео перед воспроизведением
-          if (videoToPlay.readyState < 3) { // HAVE_FUTURE_DATA
-            await new Promise(resolve => {
-              const onCanPlay = () => {
-                videoToPlay.removeEventListener('canplay', onCanPlay);
-                resolve();
-              };
-              videoToPlay.addEventListener('canplay', onCanPlay);
-            });
-          }
-
-          // Запускаем воспроизведение нового видео
-          await videoToPlay.play();
-
-          // Задержка чтобы новое видео точно показало первый кадр
-          setTimeout(() => {
-            // Только после запуска нового видео скрываем остальные
-            clips.forEach(c => {
-              if (c.id !== next.id) {
-                c.el.pause();
-                c.el.currentTime = 0;
-                c.el.style.opacity = '0';
-              }
-            });
-          }, CONFIG.hideOldVideosDelay);
-
-        } catch (e) {
-          console.error("Ошибка воспроизведения:", e);
-
-          // Обрабатываем ошибку через централизованную систему
-          ErrorHandler.handleCriticalError(e, `Воспроизведение видео ${next.id}`);
-
-          // При ошибке воспроизведения показываем постер
-          console.log('Fallback to poster due to playback error');
+        videoToPlay.play().catch(e => {
+          console.error('Ошибка воспроизведения:', e);
           showPoster();
           videoToPlay.style.opacity = '0';
+          rewindBtn.disabled = false;
+          againBtn.disabled = false;
+        });
 
-          rewindBtn.disabled = false; // Разблокируем кнопку перемотки в случае ошибки
-          againBtn.disabled = false;  // Разблокируем кнопку "Ещё раз" в случае ошибки
-        }
+        setTimeout(() => {
+          clips.forEach(c => {
+            if (c.id !== next.id) {
+              c.el.pause();
+              c.el.currentTime = 0;
+              c.el.style.opacity = '0';
+            }
+          });
+        }, 200);
       }
 
       rewindBtn.addEventListener('click', () => {
-        // Дополнительная защита от множественных кликов
-        if (rewindBtn.disabled || isReversing) {
-          return;
-        }
-        rewindToStart();
+        if (!rewindBtn.disabled && !isReversing) rewindToStart();
       });
 
       againBtn.addEventListener('click', () => {
-        // Дополнительная защита от множественных кликов
-        if (againBtn.disabled || isReversing) {
-          return;
-        }
-        playNext();
+        if (!againBtn.disabled && !isReversing) playNext();
       });
 
-      // Функция ожидания загрузки всех ассетов с отслеживанием прогресса
       async function waitForAssets () {
-        let totalAssets = 0; // Общее количество ассетов
-        let loadedAssets = 0; // Количество загруженных ассетов
-        let animationFrameId = null; // ID для requestAnimationFrame
-        let progressAnimationId = null; // ID для анимации прогресса
+        let progress = 0;
         let startTime = Date.now();
-        let maxLoadTime = 15000; // Максимальное время загрузки 15 секунд
 
-        // Подсчитываем общее количество ассетов
-        totalAssets = 1 + clips.length; // постер + видео
-
-        console.log('Loading assets:', {
-          totalAssets,
-          clips: clips.map(c => c.id)
-        });
-
-        // Функция обновления UI с плавной анимацией
-        function updateUI (forceProgress = null) {
-          let progress;
-
-          if (forceProgress !== null) {
-            progress = forceProgress;
-          } else {
-            // Базовый прогресс на основе количества загруженных ассетов
-            const baseProgress = (loadedAssets / totalAssets) * 80; // 80% за загруженные ассеты
-
-            // Дополнительный прогресс на основе времени
-            const timeProgress = Math.min(20, (Date.now() - startTime) / (maxLoadTime * 0.8) * 20);
-
-            progress = Math.min(95, baseProgress + timeProgress);
-          }
-
+        function updateUI () {
+          const timeElapsed = Date.now() - startTime;
+          progress = Math.min(90, (timeElapsed / 3000) * 90);
           progressBar.style.width = `${progress}%`;
           loadingText.textContent = `Загрузка... ${Math.round(progress)}%`;
-
-          // Логирование для отладки
-          console.log('Progress update:', {
-            loadedAssets,
-            totalAssets,
-            progress: Math.round(progress) + '%',
-            timeElapsed: Math.round((Date.now() - startTime) / 1000) + 's'
-          });
         }
 
-        // Функция запуска анимации обновления UI
-        function startUIAnimation () {
-          if (animationFrameId) return;
-
-          function animate () {
-            updateUI();
-            animationFrameId = requestAnimationFrame(animate);
-          }
-          animate();
-        }
-
-        // Функция остановки анимации
-        function stopUIAnimation () {
-          if (animationFrameId) {
-            cancelAnimationFrame(animationFrameId);
-            animationFrameId = null;
-          }
-          if (progressAnimationId) {
-            clearInterval(progressAnimationId);
-            progressAnimationId = null;
-          }
-        }
-
-        // Запускаем анимацию UI
-        startUIAnimation();
-
-
-        const assets = [
-          // Ждем загрузки постера
-          new Promise((resolve) => {
-            const onLoad = () => {
-              loadedAssets++;
-              console.log(`Poster loaded (${loadedAssets}/${totalAssets})`);
-              updateUI();
-              resolve();
-            };
-
-            if (poster.complete) {
-              onLoad();
-            } else {
-              poster.addEventListener('load', onLoad, { once: true });
-              poster.addEventListener('error', () => {
-                ErrorHandler.handleWarning('Не удалось загрузить постер', 'Загрузка изображения');
-                onLoad();
-              }, { once: true });
-            }
-          }),
-          // Ждем загрузки всех видео
-          ...clips.map((clip) =>
-            new Promise((resolve) => {
-              const video = clip.el;
-              let isResolved = false;
-              let hasStartedLoading = false;
-
-              // Функция проверки готовности видео
-              const checkVideoReady = () => {
-                if (isResolved) return;
-
-                // Универсальные критерии готовности
-                const isReady = video.readyState >= 3 && // HAVE_FUTURE_DATA
-                  video.duration > 0 &&
-                  (video.buffered.length === 0 ||
-                    video.buffered.end(video.buffered.length - 1) >= video.duration * 0.3); // 30% загружено
-
-                console.log(`Video ${clip.id} ready check:`, {
-                  readyState: video.readyState,
-                  bufferedEnd: video.buffered.length > 0 ? video.buffered.end(video.buffered.length - 1) : 0,
-                  duration: video.duration,
-                  isReady
-                });
-
-                if (isReady) {
-                  isResolved = true;
-                  loadedAssets++;
-                  console.log(`Video ${clip.id} completed (${loadedAssets}/${totalAssets})`);
-                  updateUI();
-                  resolve();
-                }
-              };
-
-              const onError = () => {
-                if (isResolved) return;
-                isResolved = true;
-                loadedAssets++;
-                console.log(`Video ${clip.id} error, treating as completed (${loadedAssets}/${totalAssets})`);
-                ErrorHandler.handleWarning(`Ошибка загрузки видео ${clip.id}`, 'Загрузка видео');
-                updateUI();
-                resolve();
-              };
-
-              const onLoadStart = () => {
-                if (!hasStartedLoading) {
-                  hasStartedLoading = true;
-                  console.log(`Video ${clip.id} started loading`);
-                }
-              };
-
-              const onProgress = () => {
-                if (!isResolved) {
-                  checkVideoReady();
-                }
-              };
-
-              // Добавляем слушатели событий
-              video.addEventListener('loadstart', onLoadStart);
-              video.addEventListener('loadeddata', checkVideoReady);
-              video.addEventListener('canplay', checkVideoReady);
-              video.addEventListener('canplaythrough', checkVideoReady);
-              video.addEventListener('progress', onProgress);
-              video.addEventListener('error', onError);
-
-
-
-              // Очищаем таймаут при завершении
-              const originalResolve = resolve;
-              resolve = () => {
-                clearTimeout(timeout);
-                video.removeEventListener('loadstart', onLoadStart);
-                video.removeEventListener('loadeddata', checkVideoReady);
-                video.removeEventListener('canplay', checkVideoReady);
-                video.removeEventListener('canplaythrough', checkVideoReady);
-                video.removeEventListener('progress', onProgress);
-                video.removeEventListener('error', onError);
-                originalResolve();
-              };
-
-              // Если видео уже готово
-              if (video.readyState >= 3) {
-                checkVideoReady();
-              }
-            })
-          )
-        ];
+        const animate = () => {
+          updateUI();
+          requestAnimationFrame(animate);
+        };
+        animate();
 
         try {
-          await Promise.all(assets);
-
-          // Останавливаем анимацию UI
-          stopUIAnimation();
-
-          // Финальная проверка готовности
-          const allVideosReady = clips.every(clip => {
-            const video = clip.el;
-            return video.readyState >= 3 &&
-              video.duration > 0 &&
-              (video.buffered.length === 0 ||
-                video.buffered.end(video.buffered.length - 1) >= video.duration * 0.2);
+          await new Promise(resolve => {
+            if (poster.complete) resolve();
+            else poster.addEventListener('load', resolve, { once: true });
           });
 
-          if (allVideosReady) {
-            console.log('Все ассеты загружены и готовы к воспроизведению');
-            console.log(`Загружено ассетов: ${loadedAssets}/${totalAssets}`);
-            ErrorHandler.handleSuccess('Все ресурсы загружены успешно', 'Инициализация');
-          } else {
-            console.log('Видео готовы к воспроизведению');
-            console.log(`Загружено ассетов: ${loadedAssets}/${totalAssets}`);
-          }
+          const videoUrls = clips.map(c => c.src);
+          const { items } = await preloadVideos(videoUrls);
 
-          // Плавно доводим прогресс до 100%
-          updateUI(100);
+          clips.forEach((clip, index) => {
+            clip.el = items[index].element;
+          });
+
+          progress = 100;
+          progressBar.style.width = '100%';
           loadingText.textContent = 'Готово!';
 
-          // Показываем экран запуска после небольшой задержки
           setTimeout(() => {
             loadingIndicator.style.display = 'none';
             stage.classList.remove('loading');
-
-            // Проверяем что постер загружен
-            const startPoster = document.getElementById('startPoster');
-            const startBtn = document.getElementById('startBtn');
-            console.log('Start poster loaded:', startPoster.complete, startPoster.naturalWidth, startPoster.naturalHeight);
-            console.log('Start button found:', startBtn, 'visible:', getComputedStyle(startBtn).visibility, 'opacity:', getComputedStyle(startBtn).opacity);
-
-            // Если постер не загружен, ждем его загрузки
-            if (!startPoster.complete) {
-              startPoster.addEventListener('load', () => {
-                console.log('Start poster loaded after wait');
-                startScreen.classList.add('visible');
-              });
-              startPoster.addEventListener('error', () => {
-                console.warn('Start poster failed to load');
-                ErrorHandler.handleWarning('Не удалось загрузить постер для экрана запуска', 'Экран запуска');
-                startScreen.classList.add('visible'); // Показываем экран даже без постера
-              });
-            } else {
-              startScreen.classList.add('visible');
-            }
+            startScreen.classList.add('visible');
           }, 500);
 
         } catch (error) {
-          console.log('Загрузка ассетов завершена:', error);
-          stopUIAnimation();
-
-          // В случае ошибки все равно показываем интерфейс
-          updateUI(100);
+          console.error('Ошибка загрузки:', error);
+          progress = 100;
+          progressBar.style.width = '100%';
           loadingText.textContent = 'Готово!';
-
           setTimeout(() => {
             loadingIndicator.style.display = 'none';
             stage.classList.remove('loading');
@@ -1019,24 +597,14 @@
         }
       }
 
-      // Функция запуска приложения
       function startApplication () {
         startScreen.classList.remove('visible');
-        showPoster(); // Показываем постер после загрузки
-
-        // Задержка для стабилизации
-        const delay = CONFIG.autoStartDelay;
-
-        setTimeout(playNext, delay);
+        showPoster();
+        setTimeout(playNext, CONFIG.autoStartDelay);
       }
 
-      // Обработчик клика кнопки "Начать"
       startBtn.addEventListener('click', startApplication);
-
-      // Загрузка ассетов при входе
-      (async () => {
-        await waitForAssets();
-      })();
+      waitForAssets();
 
     })();
   </script>
