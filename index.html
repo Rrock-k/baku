@@ -170,7 +170,7 @@
       opacity: 0;
     }
 
-    .start-screen {
+    .main-screen {
       position: absolute;
       top: 0;
       left: 0;
@@ -185,23 +185,21 @@
       transition: opacity 0.5s ease;
     }
 
-    .start-screen.visible {
+    .main-screen.visible {
       opacity: 1;
     }
 
-    .start-screen .poster {
+    .poster-background {
       position: absolute;
       inset: 0;
       width: 100%;
       height: 100%;
       object-fit: cover;
       display: block;
-      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-      opacity: 1 !important;
-      /* Принудительно показываем постер на экране запуска */
+      opacity: 1;
     }
 
-    .again-screen-content {
+    .main-screen-content {
       display: flex;
       flex-direction: row;
       gap: 10px;
@@ -312,13 +310,11 @@
 
 
 
-      <div id="startScreen" class="start-screen">
-        <img id="startPoster" class="poster" src="optimized/poster.jpg" alt="Baku poster" />
-        <button id="startBtn" class="main-btn">Start</button>
-      </div>
+      <!-- Фоновый постер, который всегда виден -->
+      <img id="posterBackground" class="poster-background" src="optimized/poster.jpg" alt="Baku poster" />
 
-      <div id="againScreen" class="start-screen" style="display: none;">
-        <div class="again-screen-content">
+      <div id="mainScreen" class="main-screen">
+        <div class="main-screen-content">
           <button id="nextBtn" class="main-btn">Read</button>
           <button id="showBtn" class="main-btn">Look</button>
         </div>
@@ -579,9 +575,7 @@
       const progressBar = document.getElementById('progressBar');
       const loadingText = document.getElementById('loadingText');
       const loadingDetails = document.getElementById('loadingDetails');
-      const startScreen = document.getElementById('startScreen');
-      const startBtn = document.getElementById('startBtn');
-      const againScreen = document.getElementById('againScreen');
+      const mainScreen = document.getElementById('mainScreen');
       const whishesText = document.getElementById('whishesText');
       const wishesSignature = document.getElementById('wishesSignature');
 
@@ -655,8 +649,8 @@
         if (isReversing) return;
 
         // Скрываем кнопки при начале воспроизведения
-        againScreen.style.display = 'none';
-        againScreen.classList.remove('visible');
+        mainScreen.style.display = 'none';
+        mainScreen.classList.remove('visible');
 
         // Скрываем wishes-text и подпись при начале нового видео
         whishesText.classList.remove('show');
@@ -710,8 +704,8 @@
           videoToPlay.play().catch(e => {
             console.error('Ошибка воспроизведения:', e);
             videoToPlay.style.opacity = '0';
-            againScreen.style.display = 'flex';
-            againScreen.classList.add('visible');
+            mainScreen.style.display = 'flex';
+            mainScreen.classList.add('visible');
           });
         };
 
@@ -776,8 +770,8 @@
           }
         }
 
-        againScreen.style.display = 'flex';
-        againScreen.classList.add('visible');
+        mainScreen.style.display = 'flex';
+        mainScreen.classList.add('visible');
       }
 
 
@@ -785,8 +779,8 @@
         if (isReversing) return;
 
         // Скрываем кнопку "Ещё раз" при начале воспроизведения
-        againScreen.style.display = 'none';
-        againScreen.classList.remove('visible');
+        mainScreen.style.display = 'none';
+        mainScreen.classList.remove('visible');
 
         // Скрываем wishes-text и подпись при начале нового видео
         whishesText.classList.remove('show');
@@ -846,8 +840,8 @@
           videoToPlay.play().catch(e => {
             console.error('Ошибка воспроизведения:', e);
             videoToPlay.style.opacity = '0';
-            againScreen.style.display = 'flex';
-            againScreen.classList.add('visible');
+            mainScreen.style.display = 'flex';
+            mainScreen.classList.add('visible');
           });
         };
 
@@ -920,7 +914,7 @@
           setTimeout(() => {
             loadingIndicator.style.display = 'none';
             stage.classList.remove('loading');
-            startScreen.classList.add('visible');
+            mainScreen.classList.add('visible');
           }, 500);
 
         } catch (error) {
@@ -929,17 +923,11 @@
           setTimeout(() => {
             loadingIndicator.style.display = 'none';
             stage.classList.remove('loading');
-            startScreen.classList.add('visible');
+            mainScreen.classList.add('visible');
           }, 500);
         }
       }
 
-      function startApplication () {
-        startScreen.classList.remove('visible');
-        setTimeout(playNext, CONFIG.autoStartDelay);
-      }
-
-      startBtn.addEventListener('click', startApplication);
       waitForAssets();
 
       // Обработка событий видимости страницы - сброс в изначальное состояние при возвращении
@@ -974,15 +962,16 @@
         stopAll();
 
         // Скрываем экран "Следующее"
-        againScreen.style.display = 'none';
-        againScreen.classList.remove('visible');
+        mainScreen.style.display = 'none';
+        mainScreen.classList.remove('visible');
 
         // Скрываем текст поздравлений
         whishesText.classList.remove('show');
         wishesSignature.classList.remove('show');
 
-        // Показываем стартовый экран
-        startScreen.classList.add('visible');
+        // Показываем главный экран с кнопками
+        mainScreen.style.display = 'flex';
+        mainScreen.classList.add('visible');
 
         // Сбрасываем текущее видео
         current = null;
