@@ -11,17 +11,19 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Вычисляем метку релиза один раз и делимся ею между шагами
       - name: Set release timestamp
         run: echo "RELEASE_TS=$(date +%Y%m%d%H%M%S)" >> $GITHUB_ENV
 
-      # Упакуем только нужные файлы из репо
-      # Исключим служебное (git, workflows, md)
-      - name: Make tarball
+      - name: Make tarball (no build)
         run: |
-          tar -czf site.tar.gz \
-            --exclude='.git' --exclude='.gitignore' --exclude='.gitattributes' \
-            --exclude='.github' --exclude='README*' --exclude='*.md' \
+          mkdir -p /tmp/deploy
+          tar -czf /tmp/deploy/site.tar.gz \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='.gitignore' \
+            --exclude='.gitattributes' \
+            --exclude='README*' \
+            --exclude='*.md' \
             .
 
       - name: Add host to known_hosts
@@ -30,14 +32,14 @@ jobs:
           ssh-keyscan -p "${{ secrets.SSH_PORT }}" "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
 
-      - name: Upload tarball to server
+      - name: Upload artifact to server
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           port: ${{ secrets.SSH_PORT }}
-          source: "site.tar.gz"
+          source: "/tmp/deploy/site.tar.gz"
           target: "/tmp"
 
       - name: Unpack and switch symlink (atomic)
@@ -50,13 +52,29 @@ jobs:
           script: |
             set -euo pipefail
             app=/var/www/baku-with.love
-            release="$app/releases/${{ env.RELEASE_TS }}"
+            releases_dir="$app/releases"
+            release="$releases_dir/${{ env.RELEASE_TS }}"
+
+            # ensure dirs exist
+            mkdir -p "$releases_dir"
+
+            # ensure archive exists
+            test -f /tmp/site.tar.gz
+
+            # unpack
             mkdir -p "$release"
             tar -xzf /tmp/site.tar.gz -C "$release"
+
+            # atomic switch
             ln -sfn "$release" "$app/current"
             sudo chown -h www-data:www-data "$app/current"
-            # Права на файлы/папки (читаемо nginx-ом)
+
+            # perms (читает любой веб-сервер)
             find "$release" -type d -exec chmod 755 {} \;
             find "$release" -type f -exec chmod 644 {} \;
-            # Перечитать nginx
+
+            # keep last 10 releases, remove older
+            ls -1dt "$releases_dir"/* | tail -n +11 | xargs -r rm -rf
+
+            # nginx reload
             sudo /usr/bin/systemctl reload nginx
