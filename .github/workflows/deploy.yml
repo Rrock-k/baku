@@ -11,20 +11,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Метка релиза (для каталога releases/<ts>)
       - name: Set release timestamp
         run: echo "RELEASE_TS=$(date +%Y%m%d%H%M%S)" >> $GITHUB_ENV
 
-      - name: Make tarball (no build)
+      # Архивируем только отслеживаемые git-файлы (без служебного)
+      # Чтобы дополнительно исключить .github/ и README.md, добавь в корне .gitattributes:
+      # .github/ export-ignore
+      # README.md export-ignore
+      # *.md export-ignore
+      - name: Make tarball via git archive (no build)
         run: |
-          mkdir -p /tmp/deploy
-          tar -czf /tmp/deploy/site.tar.gz \
-            --exclude='.git' \
-            --exclude='.github' \
-            --exclude='.gitignore' \
-            --exclude='.gitattributes' \
-            --exclude='README*' \
-            --exclude='*.md' \
-            .
+          mkdir -p artifact
+          git archive --format=tar HEAD | gzip -n > artifact/site.tar.gz
+          ls -lh artifact/site.tar.gz
 
       - name: Add host to known_hosts
         run: |
@@ -32,6 +32,7 @@ jobs:
           ssh-keyscan -p "${{ secrets.SSH_PORT }}" "${{ secrets.SSH_HOST }}" >> ~/.ssh/known_hosts
           chmod 644 ~/.ssh/known_hosts
 
+      # Кладём архив на сервер как /tmp/site.tar.gz
       - name: Upload artifact to server
         uses: appleboy/scp-action@v0.1.7
         with:
@@ -39,8 +40,9 @@ jobs:
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           port: ${{ secrets.SSH_PORT }}
-          source: "/tmp/deploy/site.tar.gz"
+          source: "artifact/site.tar.gz"
           target: "/tmp"
+          strip_components: 1
 
       - name: Unpack and switch symlink (atomic)
         uses: appleboy/ssh-action@v1.1.0
@@ -69,11 +71,11 @@ jobs:
             ln -sfn "$release" "$app/current"
             sudo chown -h www-data:www-data "$app/current"
 
-            # perms (читает любой веб-сервер)
+            # perms
             find "$release" -type d -exec chmod 755 {} \;
             find "$release" -type f -exec chmod 644 {} \;
 
-            # keep last 10 releases, remove older
+            # keep last 10 releases
             ls -1dt "$releases_dir"/* | tail -n +11 | xargs -r rm -rf
 
             # nginx reload
