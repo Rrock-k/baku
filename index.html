@@ -764,13 +764,64 @@
       startBtn.addEventListener('click', startApplication);
       waitForAssets();
 
+      // Обработка событий видимости страницы - сброс в изначальное состояние при возвращении
+      let isPageVisible = true;
+
+      document.addEventListener('visibilitychange', function () {
+        if (document.hidden) {
+          // Страница скрыта
+          isPageVisible = false;
+          console.log('Страница скрыта');
+        } else {
+          // Страница активна - сбрасываем всё в изначальное состояние
+          isPageVisible = true;
+          console.log('Страница активна, сбрасываем в изначальное состояние');
+          resetToInitialState();
+        }
+      });
+
+      // Обработка событий фокуса окна как дополнительная защита
+      window.addEventListener('blur', function () {
+        console.log('Окно потеряло фокус');
+      });
+
+      window.addEventListener('focus', function () {
+        console.log('Окно получило фокус, сбрасываем в изначальное состояние');
+        resetToInitialState();
+      });
+
+      // Функция сброса в изначальное состояние
+      function resetToInitialState () {
+        // Останавливаем все видео
+        stopAll();
+
+        // Скрываем экран "Следующее"
+        againScreen.style.display = 'none';
+        againScreen.classList.remove('visible');
+
+        // Скрываем текст поздравлений
+        whishesText.classList.remove('show');
+        wishesSignature.classList.remove('show');
+
+        // Показываем стартовый экран
+        startScreen.classList.add('visible');
+
+        // Сбрасываем текущее видео
+        current = null;
+        lastId = null;
+
+        console.log('Состояние сброшено в изначальное');
+      }
+
       // Делаем функции доступными в глобальной области для отладки
       window.resetWishStats = resetWishViewCounts;
       window.getWishStats = getWishViewCounts;
+      window.resetToInitial = resetToInitialState;
 
       // Инструкции для отладки в консоли:
       // resetWishStats() - сбросить статистику просмотров
       // getWishStats() - посмотреть текущую статистику
+      // resetToInitial() - сбросить в изначальное состояние
 
     })();
   </script>
