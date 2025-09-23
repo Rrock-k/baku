@@ -205,6 +205,7 @@
       display: flex;
       flex-direction: row;
       gap: 10px;
+      margin-bottom: 17%
     }
 
     .main-btn {
@@ -227,7 +228,6 @@
       display: block !important;
       min-width: 120px;
       min-height: 50px;
-      margin-bottom: 17%;
     }
 
     .main-btn:hover {
@@ -465,10 +465,23 @@
         const minCount = Math.min(...wishCounts.map(wc => wc.count));
 
         // Выбираем из поздравлений с минимальным количеством просмотров
-        const leastViewedWishes = wishCounts.filter(wc => wc.count === minCount);
+        let leastViewedWishes = wishCounts.filter(wc => wc.count === minCount);
+
+        // Исключаем последнее выбранное поздравление, если есть другие варианты
+        if (lastSelectedWishId && leastViewedWishes.length > 1) {
+          leastViewedWishes = leastViewedWishes.filter(wc => wc.wish.id !== lastSelectedWishId);
+        }
+
+        // Если после исключения не осталось вариантов, используем все доступные
+        if (leastViewedWishes.length === 0) {
+          leastViewedWishes = wishCounts.filter(wc => wc.count === minCount);
+        }
 
         // Случайно выбираем одно из поздравлений с наименьшим количеством просмотров
         const selectedWish = leastViewedWishes[Math.floor(Math.random() * leastViewedWishes.length)];
+
+        // Запоминаем выбранное поздравление
+        lastSelectedWishId = selectedWish.wish.id;
 
         return selectedWish.wish;
       }
@@ -582,6 +595,9 @@
         // Для отладки - выводим статистику в консоль
         console.log('Выбрано поздравление:', selectedWish.id, 'Просмотров:', getWishViewCount(selectedWish.id));
         console.log('Общая статистика:', getWishViewCounts());
+
+        // Возвращаем выбранное поздравление для последующего инкремента
+        return selectedWish;
       }
 
       let lastId = null;
@@ -589,6 +605,8 @@
       let current = null;
       let reverseInterval = null; // Отслеживание активного интервала обратного воспроизведения
       let isReversing = false; // Флаг для предотвращения повторных вызовов
+      let lastSelectedWishId = null; // ID последнего выбранного поздравления
+      let currentSelectedWish = null; // Текущее выбранное поздравление
 
       // Простая обработка ошибок
       function showError (message) {
@@ -751,9 +769,11 @@
           wishesSignature.classList.add('show');
 
           // Увеличиваем счетчик просмотров только после появления текста
-          const selectedWish = selectWishWithLeastViews();
-          incrementWishView(selectedWish.id);
-          console.log('Поздравление просмотрено:', selectedWish.id, 'Просмотров:', getWishViewCount(selectedWish.id));
+          if (currentSelectedWish) {
+            incrementWishView(currentSelectedWish.id);
+            console.log('Поздравление просмотрено:', currentSelectedWish.id, 'Просмотров:', getWishViewCount(currentSelectedWish.id));
+            currentSelectedWish = null; // Сбрасываем после использования
+          }
         }
 
         againScreen.style.display = 'flex';
@@ -811,7 +831,7 @@
 
         // Обновляем поздравление только для paper видео (кнопка Next)
         if (next.id === 'paper') {
-          updateWishes();
+          currentSelectedWish = updateWishes();
         }
 
         // Устанавливаем скорость воспроизведения из конфига
