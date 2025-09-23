@@ -252,7 +252,7 @@
       display: flex;
       flex-direction: column;
       align-items: flex-start;
-      justify-content: flex-start;
+      justify-content: center;
       box-sizing: border-box;
       pointer-events: none;
       transition: opacity 1s ease, transform 1s ease;
@@ -262,9 +262,7 @@
     }
 
     .wishes-content {
-      flex: 1;
       display: flex;
-      align-items: center;
       justify-content: flex-start;
       overflow: hidden;
     }
@@ -350,18 +348,95 @@
       // Массив поздравлений для динамической смены
       const wishes = [
         {
+          id: 'timur-1',
           text: `"Вы помните, вы всё конечно помните". А что забыла, я вспомню за нас двоих. Обещаю, только хорошее.</br></br>Люблю. С днем рождения.`,
           signature: "— Тимур"
         },
         {
-          text: `Женя, прекрасная моя кошечка, желаю тебе легкого счастливого года, сил и тепла, удачи и радости! Обнимаю крепко крепко. Надеюсь на встречу. Приветы и поздравления от моих мужчин. <br></br>P.S. Кстати, Тим собирается в Японию) <br></br>P.S. Кстати, Тим собирается в Японию)
+          id: 'ellada-1',
+          text: `Женя, прекрасная моя кошечка, желаю тебе легкого счастливого года, сил и тепла, удачи и радости! Обнимаю крепко крепко. Надеюсь на встречу. Приветы и поздравления от моих мужчин. <br></br>P.S. Кстати, Тим собирается в Японию)
 `,
           signature: "— Эллада"
         },
-
+        {
+          id: 'mom-1',
+          text: `Дорогая доченька! С днем рождения! Желаю тебе здоровья, счастья, любви и всех благ! Пусть каждый день приносит радость и улыбки!`,
+          signature: "— Мама"
+        },
+        {
+          id: 'dad-1',
+          text: `С днем рождения, дочка! Горжусь тобой и желаю всего самого лучшего в жизни!`,
+          signature: "— Папа"
+        },
+        {
+          id: 'friend-1',
+          text: `С днем рождения! Желаю тебе море улыбок, горы счастья и океан любви! Пусть все мечты сбываются!`,
+          signature: "— Друзья"
+        }
 
       ];
 
+      // Система отслеживания просмотров поздравлений
+      const WISHES_STORAGE_KEY = 'baku_wishes_views';
+
+      // Функции для работы с localStorage
+      function getWishViewCounts () {
+        try {
+          const stored = localStorage.getItem(WISHES_STORAGE_KEY);
+          return stored ? JSON.parse(stored) : {};
+        } catch (error) {
+          console.error('Ошибка чтения из localStorage:', error);
+          return {};
+        }
+      }
+
+      function saveWishViewCounts (counts) {
+        try {
+          localStorage.setItem(WISHES_STORAGE_KEY, JSON.stringify(counts));
+        } catch (error) {
+          console.error('Ошибка сохранения в localStorage:', error);
+        }
+      }
+
+      function incrementWishView (wishId) {
+        const counts = getWishViewCounts();
+        counts[wishId] = (counts[wishId] || 0) + 1;
+        saveWishViewCounts(counts);
+        return counts[wishId];
+      }
+
+      function getWishViewCount (wishId) {
+        const counts = getWishViewCounts();
+        return counts[wishId] || 0;
+      }
+
+      // Функция для сброса статистики (для тестирования)
+      function resetWishViewCounts () {
+        localStorage.removeItem(WISHES_STORAGE_KEY);
+        console.log('Статистика просмотров сброшена');
+      }
+
+      // Функция выбора поздравления с наименьшим количеством просмотров
+      function selectWishWithLeastViews () {
+        const counts = getWishViewCounts();
+
+        // Получаем количество просмотров для каждого поздравления
+        const wishCounts = wishes.map(wish => ({
+          wish: wish,
+          count: counts[wish.id] || 0
+        }));
+
+        // Находим минимальное количество просмотров
+        const minCount = Math.min(...wishCounts.map(wc => wc.count));
+
+        // Выбираем из поздравлений с минимальным количеством просмотров
+        const leastViewedWishes = wishCounts.filter(wc => wc.count === minCount);
+
+        // Случайно выбираем одно из поздравлений с наименьшим количеством просмотров
+        const selectedWish = leastViewedWishes[Math.floor(Math.random() * leastViewedWishes.length)];
+
+        return selectedWish.wish;
+      }
 
       // Система предзагрузки с реальным прогрессом
       async function fetchWithProgress (url, onProgress) {
@@ -463,10 +538,17 @@
 
       // Функция для смены поздравлений
       function updateWishes () {
-        const randomWish = wishes[Math.floor(Math.random() * wishes.length)];
+        const selectedWish = selectWishWithLeastViews();
         const wishesContent = whishesText.querySelector('.wishes-content');
-        wishesContent.innerHTML = randomWish.text;
-        wishesSignature.textContent = randomWish.signature;
+        wishesContent.innerHTML = selectedWish.text;
+        wishesSignature.textContent = selectedWish.signature;
+
+        // Отслеживаем просмотр поздравления
+        incrementWishView(selectedWish.id);
+
+        // Для отладки - выводим статистику в консоль
+        console.log('Выбрано поздравление:', selectedWish.id, 'Просмотров:', getWishViewCount(selectedWish.id));
+        console.log('Общая статистика:', getWishViewCounts());
       }
 
       let lastId = null;
@@ -682,6 +764,14 @@
 
       startBtn.addEventListener('click', startApplication);
       waitForAssets();
+
+      // Делаем функции доступными в глобальной области для отладки
+      window.resetWishStats = resetWishViewCounts;
+      window.getWishStats = getWishViewCounts;
+
+      // Инструкции для отладки в консоли:
+      // resetWishStats() - сбросить статистику просмотров
+      // getWishStats() - посмотреть текущую статистику
 
     })();
   </script>
