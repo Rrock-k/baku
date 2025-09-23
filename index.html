@@ -542,9 +542,6 @@
         wishesContent.innerHTML = selectedWish.text;
         wishesSignature.textContent = selectedWish.signature;
 
-        // Отслеживаем просмотр поздравления
-        incrementWishView(selectedWish.id);
-
         // Для отладки - выводим статистику в консоль
         console.log('Выбрано поздравление:', selectedWish.id, 'Просмотров:', getWishViewCount(selectedWish.id));
         console.log('Общая статистика:', getWishViewCounts());
@@ -610,6 +607,11 @@
         if (current && current.id === 'paper') {
           whishesText.classList.add('show');
           wishesSignature.classList.add('show');
+
+          // Увеличиваем счетчик просмотров только после появления текста
+          const selectedWish = selectWishWithLeastViews();
+          incrementWishView(selectedWish.id);
+          console.log('Поздравление просмотрено:', selectedWish.id, 'Просмотров:', getWishViewCount(selectedWish.id));
         }
 
         againScreen.style.display = 'flex';
