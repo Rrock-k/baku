@@ -236,7 +236,7 @@
 
     .whishes-text {
       font-family: 'Lora', serif;
-      font-size: 15px;
+      font-size: 14.5px;
       font-weight: 500;
       font-style: normal;
       position: absolute;
@@ -272,7 +272,7 @@
 
     .wishes-signature {
       font-family: 'Lora', serif;
-      font-size: 13px;
+      font-size: 12.5px;
       font-weight: 400;
       font-style: italic;
       color: #444444;
@@ -353,7 +353,7 @@
         },
         {
           id: 'ellada-1',
-          text: `Женя, прекрасная моя кошечка, желаю тебе легкого счастливого года, сил и тепла, удачи и радости! Обнимаю крепко крепко. Надеюсь на встречу. Приветы и поздравления от моих мужчин. <br></br>P.S. Кстати, Тим собирается в Японию)
+          text: `Женя, прекрасная моя кошечка, желаю тебе легкого счастливого года, сил и тепла, удачи и радости! Обнимаю крепко крепко. Надеюсь на встречу. Приветы и поздравления от моих мужчин.</br>P.S. Кстати, Тим собирается в Японию)
 `,
           signature: "— Эллада"
         },
@@ -573,7 +573,13 @@
         rewindSpeed: 5.0,
         rewindInterval: 30,
         fadeDuration: 200,
-        autoStartDelay: 100
+        autoStartDelay: 100,
+        // Скорости воспроизведения для каждого видео
+        videoSpeeds: {
+          'bouquet': 1.3,
+          'paper': 2,    // Ускоряем paper.mp4 в 1.5 раза
+          'heart': 1.3
+        }
       };
 
       function pickNext () {
@@ -680,7 +686,8 @@
         // Обновляем поздравление при каждом воспроизведении
         updateWishes();
 
-        videoToPlay.playbackRate = CONFIG.videoPlaybackRate;
+        // Устанавливаем скорость воспроизведения из конфига
+        videoToPlay.playbackRate = CONFIG.videoSpeeds[next.id] || CONFIG.videoPlaybackRate;
         videoToPlay.currentTime = 0;
         videoToPlay.addEventListener('ended', onEnded, { once: true });
 
