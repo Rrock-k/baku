@@ -201,6 +201,12 @@
       /* Принудительно показываем постер на экране запуска */
     }
 
+    .again-screen-content {
+      display: flex;
+      flex-direction: row;
+      gap: 10px;
+    }
+
     .main-btn {
       background: transparent;
       /* Временный яркий фон для отладки */
@@ -308,11 +314,14 @@
 
       <div id="startScreen" class="start-screen">
         <img id="startPoster" class="poster" src="optimized/poster.jpg" alt="Baku poster" />
-        <button id="startBtn" class="main-btn">Начать</button>
+        <button id="startBtn" class="main-btn">Start</button>
       </div>
 
       <div id="againScreen" class="start-screen" style="display: none;">
-        <button id="nextBtn" class="main-btn">Следующее</button>
+        <div class="again-screen-content">
+          <button id="nextBtn" class="main-btn">Next</button>
+          <button id="showBtn" class="main-btn">Show</button>
+        </div>
       </div>
 
       <div id="whishesText" class="whishes-text">
@@ -341,7 +350,8 @@
       const clips = [
         { id: 'bouquet', el: null, src: 'optimized/bouquet_optimized.mp4', weight: 1 },
         { id: 'paper', el: null, src: 'optimized/paper_optimized.mp4', weight: 1 },
-        { id: 'heart', el: null, src: 'optimized/heart_optimized.mp4', weight: 1 }
+        { id: 'heart', el: null, src: 'optimized/heart_optimized.mp4', weight: 1 },
+        { id: 'blowKiss', el: null, src: 'optimized/blowKiss_optimized.mp4', weight: 1 }
       ];
 
       // Массив поздравлений для динамической смены
@@ -534,6 +544,7 @@
 
 
       const nextBtn = document.getElementById('nextBtn');
+      const showBtn = document.getElementById('showBtn');
       const stage = document.getElementById('stage');
       const loadingIndicator = document.getElementById('loadingIndicator');
       const progressBar = document.getElementById('progressBar');
@@ -578,18 +589,106 @@
         videoSpeeds: {
           'bouquet': 1.3,
           'paper': 2,    // Ускоряем paper.mp4 в 1.5 раза
-          'heart': 1.3
+          'heart': 1.3,
+          'blowKiss': 1.3
         }
       };
 
       function pickNext () {
-        // TODO: Убрать это после тестирования
-        // Временно показываем только paper видео
-        return clips.find(c => c.id === 'paper');
-
         // исключаем повтор предыдущего
         const pool = clips.filter(c => c.id !== lastId);
         return pool[Math.floor(Math.random() * pool.length)];
+      }
+
+      // Функция для выбора конкретного видео по ID
+      function pickVideoById (videoId) {
+        return clips.find(c => c.id === videoId);
+      }
+
+      // Функция для воспроизведения конкретного видео
+      function playSpecificVideo (videoClip) {
+        if (isReversing) return;
+
+        // Скрываем кнопки при начале воспроизведения
+        againScreen.style.display = 'none';
+        againScreen.classList.remove('visible');
+
+        // Скрываем wishes-text и подпись при начале нового видео
+        whishesText.classList.remove('show');
+        wishesSignature.classList.remove('show');
+
+        if (current && current.el.currentTime > 0) {
+          if (reverseInterval) {
+            clearInterval(reverseInterval);
+            reverseInterval = null;
+          }
+
+          isReversing = true;
+          const video = current.el;
+
+          reverseInterval = setInterval(() => {
+            const newTime = video.currentTime - (CONFIG.rewindInterval / 1000) * CONFIG.rewindSpeed;
+
+            if (newTime <= 0) {
+              clearInterval(reverseInterval);
+              reverseInterval = null;
+              video.currentTime = 0;
+              video.pause();
+              current = null;
+              isReversing = false;
+
+              // Используем setTimeout для обеспечения корректной работы на iPhone
+              setTimeout(() => {
+                playSpecificVideo(videoClip);
+              }, 50);
+              return;
+            } else {
+              video.currentTime = newTime;
+            }
+          }, CONFIG.rewindInterval);
+          return;
+        }
+
+        lastId = videoClip.id;
+        current = videoClip;
+        const videoToPlay = videoClip.el;
+
+        // Устанавливаем скорость воспроизведения из конфига
+        videoToPlay.playbackRate = CONFIG.videoSpeeds[videoClip.id] || CONFIG.videoPlaybackRate;
+        videoToPlay.currentTime = 0;
+        videoToPlay.addEventListener('ended', onEnded, { once: true });
+
+        videoToPlay.style.opacity = '1';
+
+        // Дополнительная защита для iPhone - ждем готовности видео
+        const playVideo = () => {
+          videoToPlay.play().catch(e => {
+            console.error('Ошибка воспроизведения:', e);
+            videoToPlay.style.opacity = '0';
+            againScreen.style.display = 'flex';
+            againScreen.classList.add('visible');
+          });
+        };
+
+        // Проверяем готовность видео перед воспроизведением
+        if (videoToPlay.readyState >= 3) { // HAVE_FUTURE_DATA
+          playVideo();
+        } else {
+          videoToPlay.addEventListener('canplay', playVideo, { once: true });
+          videoToPlay.addEventListener('loadeddata', playVideo, { once: true });
+          // Fallback на случай если события не сработают
+          setTimeout(playVideo, 100);
+        }
+
+        setTimeout(() => {
+          clips.forEach(c => {
+            if (c.id !== videoClip.id) {
+              c.el.pause();
+              c.el.currentTime = 0;
+              c.el.style.opacity = '0';
+            }
+          });
+        }, 200);
       }
 
       function fadeIn (el) {
@@ -727,6 +826,19 @@
       nextBtn.addEventListener('click', () => {
         if (!isReversing) {
           playNext();
+        }
+      });
+
+      showBtn.addEventListener('click', () => {
+        if (!isReversing) {
+          // Случайно выбираем одно из видео: heart, bouquet, blowKiss
+          const showVideos = ['heart', 'bouquet', 'blowKiss'];
+          const randomVideoId = showVideos[Math.floor(Math.random() * showVideos.length)];
+          const selectedVideo = pickVideoById(randomVideoId);
+
+          if (selectedVideo) {
+            playSpecificVideo(selectedVideo);
+          }
         }
       });
 
