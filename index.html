@@ -48,7 +48,8 @@
     }
 
     .wrap {
-      width: min(100vw, 480px);
+      --stage-width: min(100vw, 480px);
+      width: var(--stage-width);
       height: 100vh;
       padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom);
     }
@@ -235,31 +236,61 @@
 
     .whishes-text {
       font-family: 'Lora', serif;
-      font-size: 4vw;
+      font-size: 15px;
       font-weight: 500;
       font-style: normal;
       position: absolute;
-      left: 20%;
+      left: 19%;
       top: 42%;
-      width: 62%;
-      height: 22%;
+      width: 64%;
+      height: 25%;
       text-align: left;
       color: #222222;
       opacity: 0;
       z-index: 21;
       transform: rotate(0.9deg);
       display: flex;
-      align-items: center;
+      flex-direction: column;
+      align-items: flex-start;
       justify-content: flex-start;
       box-sizing: border-box;
       pointer-events: none;
       transition: opacity 1s ease, transform 1s ease;
       line-height: 1.55;
       letter-spacing: 0.1vw;
+      overflow: hidden;
+    }
+
+    .wishes-content {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      overflow: hidden;
     }
 
     .whishes-text.show {
       opacity: 0.9;
+    }
+
+    .wishes-signature {
+      font-family: 'Lora', serif;
+      font-size: 13px;
+      font-weight: 400;
+      font-style: italic;
+      color: #444444;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 1s ease;
+      text-align: right;
+      line-height: 1.2;
+      letter-spacing: 0.05vw;
+      margin-top: 8px;
+      align-self: flex-end;
+    }
+
+    .wishes-signature.show {
+      opacity: 0.8;
     }
   </style>
 </head>
@@ -288,10 +319,17 @@
       </div>
 
       <div id="whishesText" class="whishes-text">
-        С днем рождения!<br>
-        Желаю счастья, здоровья<br>
-        и радости каждый день!
+        <div class="wishes-content">
+          С днем рождения!<br>
+          Желаю счастья, здоровья<br>
+          и радости каждый день!
+        </div>
+        <div id="wishesSignature" class="wishes-signature">
+          — Мама
+        </div>
       </div>
+
+
     </div>
   </div>
 
@@ -311,7 +349,17 @@
 
       // Массив поздравлений для динамической смены
       const wishes = [
-        `"Вы помните, вы всё конечно помните". А что забыла, я вспомню за нас двоих. Обещаю, только хорошее.</br></br>Люблю. С днем рождения.`,
+        {
+          text: `"Вы помните, вы всё конечно помните". А что забыла, я вспомню за нас двоих. Обещаю, только хорошее.</br></br>Люблю. С днем рождения.`,
+          signature: "— Тимур"
+        },
+        {
+          text: `Женя, прекрасная моя кошечка, желаю тебе легкого счастливого года, сил и тепла, удачи и радости! Обнимаю крепко крепко. Надеюсь на встречу. Приветы и поздравления от моих мужчин. <br></br>P.S. Кстати, Тим собирается в Японию) <br></br>P.S. Кстати, Тим собирается в Японию)
+`,
+          signature: "— Эллада"
+        },
+
+
       ];
 
 
@@ -411,11 +459,14 @@
       const startBtn = document.getElementById('startBtn');
       const againScreen = document.getElementById('againScreen');
       const whishesText = document.getElementById('whishesText');
+      const wishesSignature = document.getElementById('wishesSignature');
 
       // Функция для смены поздравлений
       function updateWishes () {
         const randomWish = wishes[Math.floor(Math.random() * wishes.length)];
-        whishesText.innerHTML = randomWish;
+        const wishesContent = whishesText.querySelector('.wishes-content');
+        wishesContent.innerHTML = randomWish.text;
+        wishesSignature.textContent = randomWish.signature;
       }
 
       let lastId = null;
@@ -468,14 +519,16 @@
           c.el.currentTime = 0;
           c.el.style.opacity = '0';
         }
-        // Скрываем wishes-text при остановке
+        // Скрываем wishes-text и подпись при остановке
         whishesText.classList.remove('show');
+        wishesSignature.classList.remove('show');
       }
 
       function onEnded () {
-        // Показываем wishes-text только для видео "paper"
+        // Показываем wishes-text и подпись только для видео "paper"
         if (current && current.id === 'paper') {
           whishesText.classList.add('show');
+          wishesSignature.classList.add('show');
         }
 
         againScreen.style.display = 'flex';
@@ -490,8 +543,9 @@
         againScreen.style.display = 'none';
         againScreen.classList.remove('visible');
 
-        // Скрываем wishes-text при начале нового видео
+        // Скрываем wishes-text и подпись при начале нового видео
         whishesText.classList.remove('show');
+        wishesSignature.classList.remove('show');
 
         if (current && current.el.currentTime > 0) {
           if (reverseInterval) {
