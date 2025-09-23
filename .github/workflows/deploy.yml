@@ -57,26 +57,21 @@ jobs:
             releases_dir="$app/releases"
             release="$releases_dir/${{ env.RELEASE_TS }}"
 
-            # ensure dirs exist
-            mkdir -p "$releases_dir"
+            # гарантируем каталоги
+            mkdir -p "$releases_dir" "$release"
 
-            # ensure archive exists
-            test -f /tmp/site.tar.gz
-
-            # unpack
-            mkdir -p "$release"
+            # распаковываем
             tar -xzf /tmp/site.tar.gz -C "$release"
 
-            # atomic switch
-            ln -sfn "$release" "$app/current"
-            sudo chown -h www-data:www-data "$app/current"
-
-            # perms
+            # права (без sudo — deploy владелец дерева)
             find "$release" -type d -exec chmod 755 {} \;
             find "$release" -type f -exec chmod 644 {} \;
 
-            # keep last 10 releases
+            # атомарно переключаем симлинк
+            ln -sfn "$release" "$app/current"
+
+            # держим последние 10 релизов
             ls -1dt "$releases_dir"/* | tail -n +11 | xargs -r rm -rf
 
-            # nginx reload
-            sudo /usr/bin/systemctl reload nginx
+            # перезагружаем nginx без запроса пароля
+            sudo -n /usr/bin/systemctl reload nginx || true
