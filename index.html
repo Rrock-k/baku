@@ -226,10 +226,13 @@
       min-height: 50px;
     }
 
-    .main-btn:hover {
-      background: #ff85a263;
-      color: white;
-      box-shadow: 0 8px 24px rgba(255, 133, 161, 0.4);
+    /* Hover эффект только для устройств с возможностью hover (десктопы) */
+    @media (hover: hover) {
+      .main-btn:hover {
+        background: #ff85a263;
+        color: white;
+        box-shadow: 0 8px 24px rgba(255, 133, 161, 0.4);
+      }
     }
 
     .main-btn:active {
