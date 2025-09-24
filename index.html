@@ -224,15 +224,23 @@
       display: block !important;
       min-width: 120px;
       min-height: 50px;
+      transition: all 0.3s ease;
     }
 
-    /* Hover эффект только для устройств с возможностью hover (десктопы) */
+    /* Hover эффект только для устройств с возможностью hover (десктопы) - слабее для контраста */
     @media (hover: hover) {
       .main-btn:hover {
-        background: #ff85a263;
+        background: #ff85a240;
         color: white;
-        box-shadow: 0 8px 24px rgba(255, 133, 161, 0.4);
+        box-shadow: 0 4px 12px rgba(255, 133, 161, 0.3);
       }
+    }
+
+    /* Эффект при нажатии/касании - ярче для контраста */
+    .main-btn.active {
+      background: #ff85a263;
+      color: white;
+      box-shadow: 0 8px 24px rgba(255, 133, 161, 0.4);
     }
 
     .main-btn:active {
@@ -917,6 +925,45 @@
           });
         }, 200);
       }
+
+      // Функция для добавления эффекта нажатия к кнопкам
+      function addTouchFeedback (button) {
+        // Добавляем класс active при нажатии/касании
+        button.addEventListener('touchstart', () => {
+          button.classList.add('active');
+        });
+
+        button.addEventListener('mousedown', () => {
+          button.classList.add('active');
+        });
+
+        // Убираем класс active при отпускании
+        button.addEventListener('touchend', () => {
+          setTimeout(() => {
+            button.classList.remove('active');
+          }, 150);
+        });
+
+        button.addEventListener('mouseup', () => {
+          setTimeout(() => {
+            button.classList.remove('active');
+          }, 150);
+        });
+
+        // Убираем класс active если курсор покинул кнопку
+        button.addEventListener('mouseleave', () => {
+          button.classList.remove('active');
+        });
+
+        // Убираем класс active при отмене касания
+        button.addEventListener('touchcancel', () => {
+          button.classList.remove('active');
+        });
+      }
+
+      // Добавляем эффект нажатия к обеим кнопкам
+      addTouchFeedback(nextBtn);
+      addTouchFeedback(showBtn);
 
       nextBtn.addEventListener('click', () => {
         if (!isReversing) {
