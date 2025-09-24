@@ -187,6 +187,11 @@
       opacity: 1;
     }
 
+    /* Скрываем элемент из потока после завершения анимации */
+    .main-screen:not(.visible) {
+      display: none;
+    }
+
     .poster-background {
       position: absolute;
       inset: 0;
@@ -708,8 +713,7 @@
       function playSpecificVideo (videoClip) {
         if (isReversing) return;
 
-        // Скрываем кнопки при начале воспроизведения
-        mainScreen.style.display = 'none';
+        // Плавно скрываем кнопки при начале воспроизведения
         mainScreen.classList.remove('visible');
 
         // Скрываем wishes-text и подпись при начале нового видео
@@ -838,8 +842,7 @@
       function playNext () {
         if (isReversing) return;
 
-        // Скрываем кнопку "Ещё раз" при начале воспроизведения
-        mainScreen.style.display = 'none';
+        // Плавно скрываем кнопки при начале воспроизведения
         mainScreen.classList.remove('visible');
 
         // Скрываем wishes-text и подпись при начале нового видео
@@ -1060,8 +1063,7 @@
         // Останавливаем все видео
         stopAll();
 
-        // Скрываем экран "Следующее"
-        mainScreen.style.display = 'none';
+        // Плавно скрываем экран с кнопками
         mainScreen.classList.remove('visible');
 
         // Скрываем текст поздравлений
